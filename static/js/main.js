@@ -129,7 +129,7 @@ class SensorValidationApp {
                 this.sessionId = storedSessionId;
                 console.log('Session ID dal localStorage:', this.sessionId);
             } else {
-                this.sessionId = 'session' + Math.random().toString(36).substring(2, 9);
+                this.sessionId = 'session_' + Math.random().toString(36).substring(2, 9);
                 localStorage.setItem('sensor_validation_session', this.sessionId);
                 console.log('Nuovo Session ID generato:', this.sessionId);
             }
@@ -139,15 +139,18 @@ class SensorValidationApp {
     /**
      * Calcola la risoluzione ottimale basata sul container e sull'immagine di riferimento
      */
-    calculateOptimalResulution(containerWidth, containerHeight, referenceAspect = null) {
+    calculateOptimalResolution(containerWidth, containerHeight, referenceAspect = null) {
+        // Se abbiamo un aspect ratio di riferimento, usalo
         const targetAspect = referenceAspect || (containerWidth / containerHeight);
 
+        // Risoluzione massima supportata dalla maggior parte delle webcam
         const MAX_WIDTH = 1920;
         const MAX_HEIGHT = 1080;
 
         let width, height;
 
         if (targetAspect > 1) {
+            // Landscape
             width = Math.min(containerWidth * window.devicePixelRatio, MAX_WIDTH);
             height = Math.round(width / targetAspect);
         } else {
@@ -156,15 +159,15 @@ class SensorValidationApp {
             width = Math.round(height * targetAspect);
         }
 
+        // Assicura che le dimensioni siano pari (requisito di molti codec)
         width = Math.floor(width / 2) * 2;
         height = Math.floor(height / 2) * 2;
 
         return { width, height };
     }
 
-
     /**
-     * Inizializza l'accesso alla camera e avvia lo streaming.
+     * Inizializza l'accesso alla camera con risoluzione adattiva
      * @returns {Promise<boolean>}
      */
     async initializeCameraWithAdaptiveResolution(preferredDeviceId = null, referenceImage = null) {
@@ -279,23 +282,22 @@ class SensorValidationApp {
                 console.log('Risoluzione ottenuta:', settings.width, 'x', settings.height);
 
                 // Attacca lo stream al video element
-                const videoElement = document.getElementById('videoElement');
-                if (!videoElement) {
+                if (!this.videoElement) {
                     console.error('Elemento video non trovato');
                     stream.getTracks().forEach(t => t.stop());
                     return false;
                 }
 
-                videoElement.srcObject = stream;
+                this.videoElement.srcObject = stream;
                 this.stream = stream;
 
                 // Aspetta il caricamento dei metadata
                 await new Promise((resolve) => {
                     const onLoaded = () => {
-                        videoElement.removeEventListener('loadedmetadata', onLoaded);
+                        this.videoElement.removeEventListener('loadedmetadata', onLoaded);
                         resolve();
                     };
-                    videoElement.addEventListener('loadedmetadata', onLoaded);
+                    this.videoElement.addEventListener('loadedmetadata', onLoaded);
                     setTimeout(resolve, 2500); // Timeout di sicurezza
                 });
 
@@ -308,6 +310,7 @@ class SensorValidationApp {
                     camStatus.className = 'badge bg-success';
                 }
 
+                this.showStatus('Camera pronta per la validazione', 'success');
                 return true;
 
             } catch (err) {
@@ -377,18 +380,19 @@ document.addEventListener('DOMContentLoaded', () => {
         // Inizializzazione camera automatica dopo un breve delay
         setTimeout(() => {
             console.log('Tentativo di inizializzazione camera...');
-            app.initializeCameraWithAdaptiveResolution().then(success => {
+
+            // Ottieni riferimento se disponibile per calcolare risoluzione ottimale
+            const storedReference = localStorage.getItem('referenceImage');
+            let referenceImage = null;
+
+            if (storedReference) {
+                referenceImage = new Image();
+                referenceImage.src = storedReference;
+            }
+
+            app.initializeCameraWithAdaptiveResolution(null, referenceImage).then(success => {
                 if (success) {
                     console.log('✅ Camera initialized successfully');
-
-                    // Aggiorna badge stato camera
-                    const camStatus = document.getElementById('camStatus');
-                    if (camStatus) {
-                        camStatus.textContent = 'Attiva';
-                        camStatus.className = 'badge bg-success';
-                    }
-
-                    app.showStatus('Camera pronta per la validazione', 'success');
                 } else {
                     console.error('❌ Failed to initialize camera');
                     app.showStatus('Errore camera - verifica i permessi e ricarica la pagina', 'error');

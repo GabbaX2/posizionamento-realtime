@@ -218,7 +218,7 @@
 
         console.log('Avvio validazione con overlay...');
 
-        // Inizializza camera se necessario
+        // Inizializza camera con risoluzione adattiva se necessario
         if (!window.sensorApp || !window.sensorApp.stream) {
             const success = await window.sensorApp.initializeCameraWithAdaptiveResolution(
                 null,
@@ -351,7 +351,6 @@
         stopBtn.addEventListener('click', stopValidation);
     }
 
-    // Aggiorna il layout quando si ridimensiona la finestra
     let resizeTimeout;
     window.addEventListener('resize', () => {
         // Debounce per evitare troppi resize
@@ -361,11 +360,16 @@
                 adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
                 syncCanvasResolution();
 
-                // Aggiorna la risoluzione della camera se è attiva
+                // Aggiorna la risoluzione della camera se è attiva e NON in validazione
+                // (per evitare interruzioni durante la validazione attiva)
                 if (window.sensorApp && window.sensorApp.stream && !isValidating) {
                     console.log('Aggiornamento risoluzione camera dopo resize...');
                     await window.sensorApp.updateCameraResolution(referenceImage);
                 }
+            } else {
+                // Mantieni massimo altezza se non ci sono reference
+                if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
+                syncCanvasResolution();
             }
         }, 500); // Attendi 500ms dopo l'ultimo resize
     });
