@@ -1,0 +1,450 @@
+{% extends "base.html" %}
+
+{% block title %}Validazione Posizionamento - Sensor Validator{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2 class="mb-4">Validazione Posizionamento con Overlay</h2>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="video-container position-relative mb-3">
+                    <!-- VIDEO WEBCAM -->
+                    <video id="videoElement" autoplay playsinline class="w-100 rounded"
+                        style="max-height: 500px;"></video>
+
+                    <!-- OVERLAY IMMAGINE DI RIFERIMENTO -->
+                    <canvas id="overlayCanvas" class="position-absolute top-0 start-0 w-100 h-100"
+                        style="pointer-events: none;"></canvas>
+                </div>
+
+                <div class="controls mt-3">
+                    <button id="startBtn" class="btn btn-success">Avvia Validazione</button>
+                    <button id="stopBtn" class="btn btn-secondary" disabled>Ferma Validazione</button>
+                    <span id="statusMessage" class="ms-3"></span>
+                </div>
+
+                <!-- SLIDER TRASPARENZA -->
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <label for="opacitySlider" class="form-label">
+                            Opacità Riferimento: <span id="opacityValue">50</span>%
+                        </label>
+                        <input type="range" class="form-range" id="opacitySlider" min="0" max="100" step="5" value="50">
+                        <small class="text-muted">Regola la trasparenza dell'immagine di riferimento</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <h4 class="mb-3">Immagine di Riferimento</h4>
+
+        <div id="referencePreview" class="card mb-3">
+            <div class="card-body text-center">
+                <p class="text-muted">Nessuna immagine di riferimento caricata</p>
+                <a href="upload.html" class="btn btn-primary">
+                    <i class="bi bi-upload"></i> Carica Riferimento
+                </a>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Statistiche</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>Fotocamera:</strong>
+                    <span id="camStatus" class="badge bg-secondary">Non inizializzata</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Validazione:</strong>
+                    <span id="validationStatus" class="badge bg-secondary">Fermo</span>
+                </div>
+                <div>
+                    <strong>Riferimento:</strong>
+                    <span id="referenceStatus" class="badge bg-secondary">Non caricato</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Istruzioni</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li>Carica un'immagine di riferimento con gli elettrodi posizionati correttamente</li>
+                    <li>Avvia la validazione per vedere l'overlay sul video</li>
+                    <li>Posiziona il tuo arto in modo che coincida con l'immagine di riferimento</li>
+                    <li>Regola l'opacità per una migliore visibilità</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let referenceImage = null;
+    let referenceMetadata = null;
+    let overlayOpacity = 0.5;
+    let isValidating = false;
+    let animationFrameId = null;
+
+    const video = document.getElementById('videoElement');
+    const canvas = document.getElementById('overlayCanvas');
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    const opacitySlider = document.getElementById('opacitySlider');
+    const opacityValue = document.getElementById('opacityValue');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const videoContainer = document.querySelector('.video-container');
+
+    const MAX_VIDEO_HEIGHT = 500; // mantiene il limite visibile precedente
+
+    // Adatta il riquadro video al rapporto d'aspetto dell'immagine di riferimento
+    function adjustContainerToReference(imgWidth, imgHeight) {
+        if (!videoContainer || !video) return;
+
+        const aspect = imgHeight / imgWidth;
+
+        // larghezza disponibile del contenitore (colonna)
+        const parentWidth = videoContainer.parentElement.clientWidth;
+
+        // altezza desiderata mantenendo aspect ratio, limitata a MAX_VIDEO_HEIGHT
+        let desiredHeight = Math.round(parentWidth * aspect);
+        if (desiredHeight > MAX_VIDEO_HEIGHT) desiredHeight = MAX_VIDEO_HEIGHT;
+
+        // Applica dimensioni CSS al container e forzi video/canvas ad adattarsi
+        videoContainer.style.width = parentWidth + 'px';
+        videoContainer.style.height = desiredHeight + 'px';
+
+        video.style.width = '100%';
+        video.style.height = '100%';
+        video.style.objectFit = 'contain';
+
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+    }
+
+    // Sincronizza la risoluzione interna del canvas con le dimensioni CSS per mantenere nitidezza
+    function syncCanvasResolution() {
+        if (!canvas) return;
+        const cssWidth = Math.round(canvas.clientWidth);
+        const cssHeight = Math.round(canvas.clientHeight);
+        if (cssWidth > 0 && cssHeight > 0 && (canvas.width !== cssWidth || canvas.height !== cssHeight)) {
+            canvas.width = cssWidth;
+            canvas.height = cssHeight;
+        }
+    }
+
+    // Carica riferimento dal localStorage
+    function loadReferenceFromStorage() {
+        const storedReference = localStorage.getItem('referenceImage');
+        const storedMetadata = localStorage.getItem('referenceMetadata');
+
+        if (storedReference && storedMetadata) {
+            referenceImage = new Image();
+            referenceImage.src = storedReference;
+            referenceMetadata = JSON.parse(storedMetadata);
+
+            console.log('✅ Riferimento caricato dal localStorage');
+
+            // Mostra anteprima
+            const referencePreview = document.getElementById('referencePreview');
+            if (referencePreview) {
+                referencePreview.innerHTML = `
+                    <div class="card-body">
+                        <img src="${storedReference}" class="img-fluid rounded mb-2" 
+                             style="max-height: 200px;">
+                        <p class="mb-1"><strong>Tipo:</strong> ${referenceMetadata.limbType}</p>
+                        <p class="mb-0"><small class="text-muted">
+                            Caricato: ${new Date(referenceMetadata.uploadDate).toLocaleString()}
+                        </small></p>
+                    </div>
+                `;
+            }
+
+            // Aggiorna badge
+            const referenceStatus = document.getElementById('referenceStatus');
+            if (referenceStatus) {
+                referenceStatus.textContent = 'Caricato';
+                referenceStatus.className = 'badge bg-success';
+            }
+
+            // Quando l'immagine è pronta, regola il container e sincronizza il canvas
+            referenceImage.onload = () => {
+                adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+                syncCanvasResolution();
+            };
+            // Se l'immagine è già in cache e ha dimensioni
+            if (referenceImage.complete && referenceImage.naturalWidth && referenceImage.naturalHeight) {
+                adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+                syncCanvasResolution();
+            }
+
+            if (startBtn) startBtn.disabled = false;
+            showStatus('Riferimento caricato! Pronto per la validazione.', 'success');
+            return true;
+        }
+
+        console.log('❌ Nessun riferimento trovato');
+        showStatus('Carica un\'immagine di riferimento per iniziare', 'warning');
+        return false;
+    }
+
+    // Slider opacità
+    if (opacitySlider && opacityValue) {
+        opacitySlider.addEventListener('input', function () {
+            overlayOpacity = this.value / 100;
+            opacityValue.textContent = this.value;
+        });
+    }
+
+    // Avvia validazione con overlay
+    async function startValidation() {
+        if (isValidating) return;
+
+        if (!referenceImage) {
+            showStatus('Carica prima un\'immagine di riferimento!', 'error');
+            return;
+        }
+
+        console.log('Avvio validazione con overlay...');
+
+        // Inizializza camera se necessario
+        if (!window.sensorApp || !window.sensorApp.stream) {
+            const success = await window.sensorApp.initializeCameraWithFallback();
+            if (!success) {
+                showStatus('Errore nell\'accesso alla fotocamera', 'error');
+                return;
+            }
+        }
+
+        // Assicura che il container sia adattato alla reference al momento dell'avvio
+        if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
+            adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+        }
+
+        isValidating = true;
+        if (startBtn) startBtn.disabled = true;
+        if (stopBtn) stopBtn.disabled = false;
+
+        const validationStatus = document.getElementById('validationStatus');
+        if (validationStatus) {
+            validationStatus.textContent = 'Attivo';
+            validationStatus.className = 'badge bg-success';
+        }
+
+        showStatus('Validazione attiva - Allinea il tuo arto con l\'overlay', 'info');
+
+        // Avvia il loop di rendering
+        renderOverlay();
+    }
+
+    // Loop di rendering overlay
+    function renderOverlay() {
+        if (!isValidating) {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            return;
+        }
+
+        if (!video || !canvas || !ctx || !referenceImage) {
+            animationFrameId = requestAnimationFrame(renderOverlay);
+            return;
+        }
+
+        // Sincronizza risoluzione canvas con dimensione CSS
+        syncCanvasResolution();
+
+        // Disegna l'immagine di riferimento ridimensionata al canvas (CSS-based)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.globalAlpha = overlayOpacity;
+        // Manteniamo il contenuto centrato e adattato (fill)
+        // Calcolo per mantenere aspect ratio dell'immagine di riferimento dentro il canvas
+        const imgW = referenceImage.naturalWidth;
+        const imgH = referenceImage.naturalHeight;
+        const cw = canvas.width;
+        const ch = canvas.height;
+
+        if (imgW > 0 && imgH > 0) {
+            const imgAspect = imgW / imgH;
+            const canvasAspect = cw / ch;
+            let drawW, drawH, offsetX, offsetY;
+
+            if (canvasAspect > imgAspect) {
+                // canvas più largo: la limitazione è l'altezza
+                drawH = ch;
+                drawW = Math.round(drawH * imgAspect);
+            } else {
+                // canvas più alto: la limitazione è la larghezza
+                drawW = cw;
+                drawH = Math.round(drawW / imgAspect);
+            }
+
+            offsetX = Math.round((cw - drawW) / 2);
+            offsetY = Math.round((ch - drawH) / 2);
+
+            ctx.drawImage(referenceImage, offsetX, offsetY, drawW, drawH);
+        }
+
+        ctx.globalAlpha = 1.0;
+
+        // Aggiungi testo informativo
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, 10, 250, 50);
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 16px Arial';
+        ctx.fillText('Allinea il tuo arto', 20, 35);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '14px Arial';
+        ctx.fillText(`Opacità: ${Math.round(overlayOpacity * 100)}%`, 20, 55);
+
+        animationFrameId = requestAnimationFrame(renderOverlay);
+    }
+
+    // Ferma validazione
+    function stopValidation() {
+        console.log('Arresto validazione...');
+        isValidating = false;
+
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+
+        if (ctx && canvas) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        if (startBtn) startBtn.disabled = false;
+        if (stopBtn) stopBtn.disabled = true;
+
+        const validationStatus = document.getElementById('validationStatus');
+        if (validationStatus) {
+            validationStatus.textContent = 'Fermo';
+            validationStatus.className = 'badge bg-secondary';
+        }
+
+        showStatus('Validazione fermata', 'info');
+    }
+
+    // Event listeners
+    if (startBtn) {
+        startBtn.addEventListener('click', startValidation);
+    }
+
+    if (stopBtn) {
+        stopBtn.addEventListener('click', stopValidation);
+    }
+
+    // Aggiorna il layout quando si ridimensiona la finestra
+    window.addEventListener('resize', () => {
+        if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
+            adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+            syncCanvasResolution();
+        } else {
+            // Mantieni massimo altezza se non ci sono reference
+            if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
+            syncCanvasResolution();
+        }
+    });
+
+    // Funzione helper per mostrare messaggi
+    function showStatus(message, type = 'info') {
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = `ms-3 text-${type}`;
+            setTimeout(() => {
+                if (!isValidating) {
+                    statusElement.textContent = '';
+                    statusElement.className = 'ms-3';
+                }
+            }, 3000);
+        }
+    }
+
+    // Inizializzazione
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('🚀 Inizializzazione pagina validazione overlay...');
+
+        // Carica il riferimento
+        const hasReference = loadReferenceFromStorage();
+
+        if (!hasReference && startBtn) {
+            startBtn.disabled = true;
+        } else {
+            // se non ci sono reference mantieni altezza massima di default
+            if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
+            syncCanvasResolution();
+        }
+    });
+</script>
+
+
+<script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+
+<style>
+    .video-container {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        /* altezza gestita dinamicamente via JS */
+        height: 500px;
+        /* valore di fallback */
+    }
+
+    #overlayCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        width: 100%;
+        height: 100%;
+    }
+
+    #videoElement {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+
+    .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+
+    @media (max-width: 768px) {
+        .controls {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .controls .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
