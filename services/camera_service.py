@@ -1,7 +1,7 @@
-import cv2
 import threading
 import time
 import platform
+import cv2
 from typing import Optional
 
 
@@ -80,6 +80,46 @@ class CameraService:
             self.camera_thread.daemon = True
             self.camera_thread.start()
             return True
+        except Exception as e:
+            print(f'Error starting camera: {e}')
+            return False
+
+    def stop_camera(self) -> None:
+        """Stop camera capture"""
+        self.is_running = False
+        if self.camera_thread and self.camera_thread.is_alive():
+            self.camera_thread.join(timeout=2.0)
+
+        if self.camera:
+            self.camera.release()
+            self.camera = None
+
+    def get_current_frame(self) -> Optional[bytes]:
+        """Get current frame as JPEG bytes"""
+        with self.lock:
+            if self.current_frame is None:
+                return None
+
+            ret, buffer = cv2.imencode('.jpg', self.current_frame)
+            if ret:
+                return buffer.tobytes()
+
+        return None
+
+    def _capture_frames(self) -> None:
+        """Capture frames in separate thread"""
+        try:
+            while self.is_running and self.camera:
+                ret, frame = self.camera.read()
+                if ret:
+                    with self.lock:
+                        self.current_frame = frame
+                else:
+                    time.sleep(0.1)
+                self.camera_thread = threading.Thread(target=self._capture_frames)
+                self.camera_thread.daemon = True
+                self.camera_thread.start()
+                return True
         except Exception as e:
             print(f'Error starting camera: {e}')
             return False
