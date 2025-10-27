@@ -137,107 +137,213 @@ class SensorValidationApp {
     }
 
     /**
+     * Calcola la risoluzione ottimale basata sul container e sull'immagine di riferimento
+     */
+    calculateOptimalResulution(containerWidth, containerHeight, referenceAspect = null) {
+        const targetAspect = referenceAspect || (containerWidth / containerHeight);
+
+        const MAX_WIDTH = 1920;
+        const MAX_HEIGHT = 1080;
+
+        let width, height;
+
+        if (targetAspect > 1) {
+            width = Math.min(containerWidth * window.devicePixelRatio, MAX_WIDTH);
+            height = Math.round(width / targetAspect);
+        } else {
+            // Portrait
+            height = Math.min(containerHeight * window.devicePixelRatio, MAX_HEIGHT);
+            width = Math.round(height * targetAspect);
+        }
+
+        width = Math.floor(width / 2) * 2;
+        height = Math.floor(height / 2) * 2;
+
+        return { width, height };
+    }
+
+
+    /**
      * Inizializza l'accesso alla camera e avvia lo streaming.
      * @returns {Promise<boolean>}
      */
-    async initializeCameraWithFallback(preferredDeviceId = null) {
-    console.log('Tentativo di accesso alla camera con fallback...');
+    async initializeCameraWithAdaptiveResolution(preferredDeviceId = null, referenceImage = null) {
+        console.log('Inizializzazione camera con risoluzione adattiva...');
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            showStatus('API camera non supportata dal browser', 'error');
+            this.showStatus('API camera non supportata dal browser', 'error');
             return false;
         }
 
-        // Helper: detect Safari (incluso iOS)
-        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-        const baseConstraints = isSafari ? { video: true } : {
-            video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                facingMode: 'user'
-            }
-        };
-
-        // If a specific deviceId is given, prefer that
-        const tryConstraintsList = [];
-
-        if (preferredDeviceId) {
-            tryConstraintsList.push({ video: { deviceId: { exact: preferredDeviceId } } });
+        // Ottieni dimensioni del container
+        const videoContainer = document.querySelector('.video-container');
+        if (!videoContainer) {
+            console.error('Container video non trovato');
+            return false;
         }
 
-        // normal constraints (may be rejected by Safari)
-        tryConstraintsList.push(baseConstraints);
+        const containerWidth = videoContainer.clientWidth;
+        const containerHeight = videoContainer.clientHeight;
 
-        // minimal constraint as last resort
+        // Calcola aspect ratio di riferimento se disponibile
+        let referenceAspect = null;
+        if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
+            referenceAspect = referenceImage.naturalWidth / referenceImage.naturalHeight;
+        }
+
+        // Calcola risoluzione ottimale
+        const optimalRes = this.calculateOptimalResolution(
+            containerWidth,
+            containerHeight,
+            referenceAspect
+        );
+
+        console.log(`Risoluzione target: ${optimalRes.width}x${optimalRes.height}`);
+
+        // Detect Safari
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+        // Costruisci lista di constraint da provare
+        const tryConstraintsList = [];
+
+        // 1. Constraint con risoluzione specifica e deviceId (se fornito)
+        if (preferredDeviceId) {
+            tryConstraintsList.push({
+                video: {
+                    deviceId: { exact: preferredDeviceId },
+                    width: { ideal: optimalRes.width },
+                    height: { ideal: optimalRes.height },
+                    aspectRatio: { ideal: referenceAspect || (optimalRes.width / optimalRes.height) }
+                }
+            });
+        }
+
+        // 2. Constraint con risoluzione specifica (senza deviceId)
+        if (!isSafari) {
+            tryConstraintsList.push({
+                video: {
+                    width: { ideal: optimalRes.width },
+                    height: { ideal: optimalRes.height },
+                    aspectRatio: { ideal: referenceAspect || (optimalRes.width / optimalRes.height) },
+                    facingMode: 'user'
+                }
+            });
+
+            // 3. Constraint con risoluzione min/max
+            tryConstraintsList.push({
+                video: {
+                    width: { min: 640, ideal: optimalRes.width, max: 1920 },
+                    height: { min: 480, ideal: optimalRes.height, max: 1080 },
+                    facingMode: 'user'
+                }
+            });
+        }
+
+        // 4. Fallback base per Safari
         tryConstraintsList.push({ video: true });
 
-        // enumerate devices to allow UI selection if needed
-        let devices = [];
+        // Enumera dispositivi disponibili
         try {
-            devices = await navigator.mediaDevices.enumerateDevices();
-            const cams = devices.filter(d => d.kind === 'videoinput');
-            if (cams.length > 1 && !preferredDeviceId) {
-                console.log('Multiple cameras detected, using default or first available');
-                // optional: present UI to choose cam, here we pick first
-                tryConstraintsList.unshift({ video: { deviceId: { exact: cams[0].deviceId } } });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cameras = devices.filter(d => d.kind === 'videoinput');
+
+            if (cameras.length > 1 && !preferredDeviceId) {
+                console.log(`${cameras.length} camere trovate`);
+                // Prova con la prima camera disponibile
+                tryConstraintsList.unshift({
+                    video: {
+                        deviceId: { exact: cameras[0].deviceId },
+                        width: { ideal: optimalRes.width },
+                        height: { ideal: optimalRes.height }
+                    }
+                });
             }
         } catch (e) {
             console.warn('Impossibile enumerare dispositivi:', e);
         }
 
-        // Try constraints sequentially
+        // Prova i constraint in sequenza
         for (const constraints of tryConstraintsList) {
             try {
-                console.log('Provando constraint:', constraints);
+                console.log('Tentativo con constraint:', constraints);
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                // stop previous stream if exists
-                if (window.sensorApp && window.sensorApp.stream) {
-                    window.sensorApp.destroy();
+
+                // Ferma stream precedente se esiste
+                if (this.stream) {
+                    this.stream.getTracks().forEach(t => t.stop());
                 }
-                // attach stream
-                if (!document.getElementById('videoElement')) {
+
+                // Ottieni le impostazioni effettive dello stream
+                const videoTrack = stream.getVideoTracks()[0];
+                const settings = videoTrack.getSettings();
+                console.log('Risoluzione ottenuta:', settings.width, 'x', settings.height);
+
+                // Attacca lo stream al video element
+                const videoElement = document.getElementById('videoElement');
+                if (!videoElement) {
                     console.error('Elemento video non trovato');
                     stream.getTracks().forEach(t => t.stop());
                     return false;
                 }
 
-                document.getElementById('videoElement').srcObject = stream;
-                // save stream
-                if (window.sensorApp) {
-                    window.sensorApp.stream = stream;
-                } else {
-                    // fallback: set global stream
-                    window._tempStream = stream;
-                }
+                videoElement.srcObject = stream;
+                this.stream = stream;
 
-                // wait metadata
-                await new Promise(resolve => {
-                    const v = document.getElementById('videoElement');
-                    const loaded = () => { v.removeEventListener('loadedmetadata', loaded); resolve(); };
-                    v.addEventListener('loadedmetadata', loaded);
-                    setTimeout(resolve, 2500);
+                // Aspetta il caricamento dei metadata
+                await new Promise((resolve) => {
+                    const onLoaded = () => {
+                        videoElement.removeEventListener('loadedmetadata', onLoaded);
+                        resolve();
+                    };
+                    videoElement.addEventListener('loadedmetadata', onLoaded);
+                    setTimeout(resolve, 2500); // Timeout di sicurezza
                 });
 
-                console.log('Camera inizializzata con successo');
-                return true;
-            } catch (err) {
-                console.warn('getUserMedia fallito con constraint:', constraints, err);
-                if (err && err.name === 'OverconstrainedError') {
-                    console.warn('OverconstrainedError: rimuovo vincoli e riprovo');
-                    continue;
+                console.log('✅ Camera inizializzata con risoluzione adattiva');
+
+                // Aggiorna badge
+                const camStatus = document.getElementById('camStatus');
+                if (camStatus) {
+                    camStatus.textContent = `Attiva (${settings.width}x${settings.height})`;
+                    camStatus.className = 'badge bg-success';
                 }
-                if (err && err.name === 'NotAllowedError') {
-                    showStatus('Permesso camera negato. Controlla le impostazioni del browser', 'error');
+
+                return true;
+
+            } catch (err) {
+                console.warn('Tentativo fallito:', err.name, err.message);
+
+                if (err.name === 'NotAllowedError') {
+                    this.showStatus('Permesso camera negato', 'error');
                     return false;
                 }
-                // altrimenti prova prossima opzione
+                // Continua con il prossimo constraint
             }
+        }
+
+        this.showStatus('Impossibile inizializzare la fotocamera', 'error');
+        return false;
     }
 
-    showStatus('Errore: impossibile inizializzare la fotocamera', 'error');
-    return false;
-}
+    /**
+     * Aggiorna la risoluzione della camera quando il container cambia dimensione
+     */
+    async updateCameraResolution(referenceImage = null) {
+        if (!this.stream) {
+            console.log('Nessuno stream attivo da aggiornare');
+            return false;
+        }
 
+        console.log('Aggiornamento risoluzione camera...');
+
+        // Ottieni il deviceId corrente
+        const videoTrack = this.stream.getVideoTracks()[0];
+        const currentSettings = videoTrack.getSettings();
+        const deviceId = currentSettings.deviceId;
+
+        // Re-inizializza con la nuova risoluzione
+        return await this.initializeCameraWithAdaptiveResolution(deviceId, referenceImage);
+    }
 
     clearCanvas() {
         if (this.context && this.canvasElement) {
@@ -271,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Inizializzazione camera automatica dopo un breve delay
         setTimeout(() => {
             console.log('Tentativo di inizializzazione camera...');
-            app.initializeCameraWithFallback().then(success => {
+            app.initializeCameraWithAdaptiveResolution().then(success => {
                 if (success) {
                     console.log('✅ Camera initialized successfully');
 

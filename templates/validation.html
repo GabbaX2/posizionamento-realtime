@@ -220,7 +220,10 @@
 
         // Inizializza camera se necessario
         if (!window.sensorApp || !window.sensorApp.stream) {
-            const success = await window.sensorApp.initializeCameraWithFallback();
+            const success = await window.sensorApp.initializeCameraWithAdaptiveResolution(
+                null,
+                referenceImage
+            );
             if (!success) {
                 showStatus('Errore nell\'accesso alla fotocamera', 'error');
                 return;
@@ -349,15 +352,22 @@
     }
 
     // Aggiorna il layout quando si ridimensiona la finestra
+    let resizeTimeout;
     window.addEventListener('resize', () => {
-        if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
-            adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
-            syncCanvasResolution();
-        } else {
-            // Mantieni massimo altezza se non ci sono reference
-            if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
-            syncCanvasResolution();
-        }
+        // Debounce per evitare troppi resize
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(async () => {
+            if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
+                adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+                syncCanvasResolution();
+
+                // Aggiorna la risoluzione della camera se è attiva
+                if (window.sensorApp && window.sensorApp.stream && !isValidating) {
+                    console.log('Aggiornamento risoluzione camera dopo resize...');
+                    await window.sensorApp.updateCameraResolution(referenceImage);
+                }
+            }
+        }, 500); // Attendi 500ms dopo l'ultimo resize
     });
 
     // Funzione helper per mostrare messaggi
