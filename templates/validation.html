@@ -19,6 +19,22 @@
                         style="pointer-events: none;"></canvas>
                 </div>
 
+                <!-- ACCURACY PANEL -->
+                <div class="accuracy-panel mb-3" id="accuracyPanel" style="display: none;">
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <div class="accuracy-circle" id="accuracyCircle">
+                                <span class="accuracy-value" id="accuracyValue">0%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <h5 class="mb-2">Allineamento</h5>
+                            <p class="mb-1 fw-bold" id="accuracyMessage">In attesa...</p>
+                            <p class="mb-0 text-muted" id="directionHint"></p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="controls mt-3">
                     <button id="startBtn" class="btn btn-success">Avvia Validazione</button>
                     <button id="stopBtn" class="btn btn-secondary" disabled>Ferma Validazione</button>
@@ -45,7 +61,7 @@
         <div id="referencePreview" class="card mb-3">
             <div class="card-body text-center">
                 <p class="text-muted">Nessuna immagine di riferimento caricata</p>
-                <a href="upload.html" class="btn btn-primary">
+                <a href="/upload" class="btn btn-primary">
                     <i class="bi bi-upload"></i> Carica Riferimento
                 </a>
             </div>
@@ -64,9 +80,32 @@
                     <strong>Validazione:</strong>
                     <span id="validationStatus" class="badge bg-secondary">Fermo</span>
                 </div>
-                <div>
+                <div class="mb-2">
                     <strong>Riferimento:</strong>
                     <span id="referenceStatus" class="badge bg-secondary">Non caricato</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4" id="metricsCard" style="display: none;">
+            <div class="card-header">
+                <h5 class="mb-0">Metriche Dettagliate</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>SSIM:</strong>
+                    <span id="ssimValue" class="badge bg-info">0%</span>
+                    <small class="text-muted d-block">Somiglianza strutturale</small>
+                </div>
+                <div class="mb-2">
+                    <strong>MSE:</strong>
+                    <span id="mseValue" class="badge bg-info">0%</span>
+                    <small class="text-muted d-block">Errore medio quadratico</small>
+                </div>
+                <div>
+                    <strong>Template Match:</strong>
+                    <span id="templateValue" class="badge bg-info">0%</span>
+                    <small class="text-muted d-block">Correlazione template</small>
                 </div>
             </div>
         </div>
@@ -79,8 +118,8 @@
                 <ol>
                     <li>Carica un'immagine di riferimento con gli elettrodi posizionati correttamente</li>
                     <li>Avvia la validazione per vedere l'overlay sul video</li>
-                    <li>Posiziona il tuo arto in modo che coincida con l'immagine di riferimento</li>
-                    <li>Regola l'opacità per una migliore visibilità</li>
+                    <li>Posiziona il tuo arto seguendo i suggerimenti di allineamento</li>
+                    <li>Raggiungi almeno 95% di accuratezza per un allineamento perfetto</li>
                 </ol>
             </div>
         </div>
@@ -96,6 +135,7 @@
     let overlayOpacity = 0.5;
     let isValidating = false;
     let animationFrameId = null;
+    let validationIntervalId = null;
 
     const video = document.getElementById('videoElement');
     const canvas = document.getElementById('overlayCanvas');
@@ -105,23 +145,25 @@
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
     const videoContainer = document.querySelector('.video-container');
+    const accuracyPanel = document.getElementById('accuracyPanel');
+    const accuracyCircle = document.getElementById('accuracyCircle');
+    const accuracyValue = document.getElementById('accuracyValue');
+    const accuracyMessage = document.getElementById('accuracyMessage');
+    const directionHint = document.getElementById('directionHint');
+    const pointsCount = document.getElementById('pointsCount');
 
-    const MAX_VIDEO_HEIGHT = 500; // mantiene il limite visibile precedente
+    const MAX_VIDEO_HEIGHT = 500;
 
     // Adatta il riquadro video al rapporto d'aspetto dell'immagine di riferimento
     function adjustContainerToReference(imgWidth, imgHeight) {
         if (!videoContainer || !video) return;
 
         const aspect = imgHeight / imgWidth;
-
-        // larghezza disponibile del contenitore (colonna)
         const parentWidth = videoContainer.parentElement.clientWidth;
 
-        // altezza desiderata mantenendo aspect ratio, limitata a MAX_VIDEO_HEIGHT
         let desiredHeight = Math.round(parentWidth * aspect);
         if (desiredHeight > MAX_VIDEO_HEIGHT) desiredHeight = MAX_VIDEO_HEIGHT;
 
-        // Applica dimensioni CSS al container e forzi video/canvas ad adattarsi
         videoContainer.style.width = parentWidth + 'px';
         videoContainer.style.height = desiredHeight + 'px';
 
@@ -133,7 +175,6 @@
         canvas.style.height = '100%';
     }
 
-    // Sincronizza la risoluzione interna del canvas con le dimensioni CSS per mantenere nitidezza
     function syncCanvasResolution() {
         if (!canvas) return;
         const cssWidth = Math.round(canvas.clientWidth);
@@ -156,12 +197,11 @@
 
             console.log('✅ Riferimento caricato dal localStorage');
 
-            // Mostra anteprima
             const referencePreview = document.getElementById('referencePreview');
             if (referencePreview) {
                 referencePreview.innerHTML = `
                     <div class="card-body">
-                        <img src="${storedReference}" class="img-fluid rounded mb-2" 
+                        <img src="${storedReference}" class="img-fluid rounded mb-2"
                              style="max-height: 200px;">
                         <p class="mb-1"><strong>Tipo:</strong> ${referenceMetadata.limbType}</p>
                         <p class="mb-0"><small class="text-muted">
@@ -171,19 +211,17 @@
                 `;
             }
 
-            // Aggiorna badge
             const referenceStatus = document.getElementById('referenceStatus');
             if (referenceStatus) {
                 referenceStatus.textContent = 'Caricato';
                 referenceStatus.className = 'badge bg-success';
             }
 
-            // Quando l'immagine è pronta, regola il container e sincronizza il canvas
             referenceImage.onload = () => {
                 adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
                 syncCanvasResolution();
             };
-            // Se l'immagine è già in cache e ha dimensioni
+
             if (referenceImage.complete && referenceImage.naturalWidth && referenceImage.naturalHeight) {
                 adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
                 syncCanvasResolution();
@@ -207,6 +245,102 @@
         });
     }
 
+    // Cattura frame dalla webcam
+    function captureFrame() {
+        if (!video || !canvas) return null;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(video, 0, 0);
+        return tempCanvas.toDataURL('image/jpeg', 0.8);
+    }
+
+    // Invia frame al server per validazione
+    async function validateFrame() {
+        if (!isValidating || !referenceImage) return;
+
+        try {
+            const currentFrame = captureFrame();
+            if (!currentFrame) return;
+
+            const response = await fetch('/api/validate_frame', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    reference_image: referenceImage.src,
+                    current_frame: currentFrame,
+                    reference_metadata: JSON.stringify(referenceMetadata)
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                updateAccuracyDisplay(result);
+            } else {
+                console.error('Validation error:', result.error);
+            }
+        } catch (error) {
+            console.error('Error validating frame:', error);
+        }
+    }
+
+    // Aggiorna display accuratezza
+    function updateAccuracyDisplay(result) {
+        const accuracy = result.accuracy || 0;
+        const message = result.message || 'In elaborazione...';
+        const direction = result.direction;
+        const points = result.points_detected || 0;
+
+        // Mostra il pannello
+        if (accuracyPanel) {
+            accuracyPanel.style.display = 'block';
+        }
+
+        // Aggiorna valore accuratezza
+        if (accuracyValue) {
+            accuracyValue.textContent = `${Math.round(accuracy)}%`;
+        }
+
+        // Aggiorna colore cerchio in base all'accuratezza
+        if (accuracyCircle) {
+            accuracyCircle.className = 'accuracy-circle';
+            if (accuracy >= 95) {
+                accuracyCircle.classList.add('excellent');
+            } else if (accuracy >= 85) {
+                accuracyCircle.classList.add('good');
+            } else if (accuracy >= 70) {
+                accuracyCircle.classList.add('fair');
+            } else {
+                accuracyCircle.classList.add('poor');
+            }
+        }
+
+        // Aggiorna messaggio
+        if (accuracyMessage) {
+            accuracyMessage.textContent = message;
+        }
+
+        // Aggiorna suggerimenti direzione
+        if (directionHint) {
+            if (direction) {
+                directionHint.innerHTML = `<i class="bi bi-arrow-right"></i> Sposta: <strong>${direction}</strong>`;
+                directionHint.style.display = 'block';
+            } else {
+                directionHint.style.display = 'none';
+            }
+        }
+
+        // Aggiorna conteggio punti
+        if (pointsCount) {
+            pointsCount.textContent = points;
+        }
+    }
+
     // Avvia validazione con overlay
     async function startValidation() {
         if (isValidating) return;
@@ -218,7 +352,7 @@
 
         console.log('Avvio validazione con overlay...');
 
-        // Inizializza camera con risoluzione adattiva se necessario
+        // Inizializza camera
         if (!window.sensorApp || !window.sensorApp.stream) {
             const success = await window.sensorApp.initializeCameraWithAdaptiveResolution(
                 null,
@@ -230,7 +364,6 @@
             }
         }
 
-        // Assicura che il container sia adattato alla reference al momento dell'avvio
         if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
             adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
         }
@@ -247,8 +380,11 @@
 
         showStatus('Validazione attiva - Allinea il tuo arto con l\'overlay', 'info');
 
-        // Avvia il loop di rendering
+        // Avvia rendering overlay
         renderOverlay();
+
+        // Avvia validazione periodica (ogni 500ms per non sovraccaricare)
+        validationIntervalId = setInterval(validateFrame, 500);
     }
 
     // Loop di rendering overlay
@@ -266,15 +402,12 @@
             return;
         }
 
-        // Sincronizza risoluzione canvas con dimensione CSS
         syncCanvasResolution();
 
-        // Disegna l'immagine di riferimento ridimensionata al canvas (CSS-based)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         ctx.globalAlpha = overlayOpacity;
-        // Manteniamo il contenuto centrato e adattato (fill)
-        // Calcolo per mantenere aspect ratio dell'immagine di riferimento dentro il canvas
+
         const imgW = referenceImage.naturalWidth;
         const imgH = referenceImage.naturalHeight;
         const cw = canvas.width;
@@ -286,11 +419,9 @@
             let drawW, drawH, offsetX, offsetY;
 
             if (canvasAspect > imgAspect) {
-                // canvas più largo: la limitazione è l'altezza
                 drawH = ch;
                 drawW = Math.round(drawH * imgAspect);
             } else {
-                // canvas più alto: la limitazione è la larghezza
                 drawW = cw;
                 drawH = Math.round(drawW / imgAspect);
             }
@@ -326,8 +457,17 @@
             animationFrameId = null;
         }
 
+        if (validationIntervalId) {
+            clearInterval(validationIntervalId);
+            validationIntervalId = null;
+        }
+
         if (ctx && canvas) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        if (accuracyPanel) {
+            accuracyPanel.style.display = 'none';
         }
 
         if (startBtn) startBtn.disabled = false;
@@ -353,25 +493,21 @@
 
     let resizeTimeout;
     window.addEventListener('resize', () => {
-        // Debounce per evitare troppi resize
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(async () => {
             if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
                 adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
                 syncCanvasResolution();
 
-                // Aggiorna la risoluzione della camera se è attiva e NON in validazione
-                // (per evitare interruzioni durante la validazione attiva)
                 if (window.sensorApp && window.sensorApp.stream && !isValidating) {
                     console.log('Aggiornamento risoluzione camera dopo resize...');
                     await window.sensorApp.updateCameraResolution(referenceImage);
                 }
             } else {
-                // Mantieni massimo altezza se non ci sono reference
                 if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
                 syncCanvasResolution();
             }
-        }, 500); // Attendi 500ms dopo l'ultimo resize
+        }, 500);
     });
 
     // Funzione helper per mostrare messaggi
@@ -393,19 +529,16 @@
     document.addEventListener('DOMContentLoaded', function () {
         console.log('🚀 Inizializzazione pagina validazione overlay...');
 
-        // Carica il riferimento
         const hasReference = loadReferenceFromStorage();
 
         if (!hasReference && startBtn) {
             startBtn.disabled = true;
         } else {
-            // se non ci sono reference mantieni altezza massima di default
             if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
             syncCanvasResolution();
         }
     });
 </script>
-
 
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 
@@ -417,9 +550,7 @@
         background: #000;
         border-radius: 8px;
         overflow: hidden;
-        /* altezza gestita dinamicamente via JS */
         height: 500px;
-        /* valore di fallback */
     }
 
     #overlayCanvas {
@@ -438,7 +569,6 @@
         object-fit: contain;
     }
 
-
     .controls {
         display: flex;
         gap: 10px;
@@ -450,6 +580,71 @@
         border: 1px solid #dee2e6;
     }
 
+    .accuracy-panel {
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        color: white;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .accuracy-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        font-size: 28px;
+        font-weight: bold;
+        border: 8px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+    }
+
+    .accuracy-circle.excellent {
+        border-color: #00ff00;
+        background: rgba(0, 255, 0, 0.2);
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+    }
+
+    .accuracy-circle.good {
+        border-color: #90ee90;
+        background: rgba(144, 238, 144, 0.2);
+        box-shadow: 0 0 20px rgba(144, 238, 144, 0.4);
+    }
+
+    .accuracy-circle.fair {
+        border-color: #ffa500;
+        background: rgba(255, 165, 0, 0.2);
+        box-shadow: 0 0 20px rgba(255, 165, 0, 0.4);
+    }
+
+    .accuracy-circle.poor {
+        border-color: #ff6b6b;
+        background: rgba(255, 107, 107, 0.2);
+        box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
+    }
+
+    .accuracy-value {
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    #accuracyMessage {
+        font-size: 1.2em;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    #directionHint {
+        font-size: 1.1em;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 8px 12px;
+        border-radius: 6px;
+        display: inline-block;
+    }
+
     @media (max-width: 768px) {
         .controls {
             flex-direction: column;
@@ -458,6 +653,12 @@
 
         .controls .btn {
             width: 100%;
+        }
+
+        .accuracy-circle {
+            width: 100px;
+            height: 100px;
+            font-size: 24px;
         }
     }
 </style>
