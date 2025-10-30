@@ -39,6 +39,7 @@ class ValidationService:
             # Salva immagine
             temp_filename = f"{session_id}_{limb_type}_reference.png"
             upload_folder = 'uploads'
+
             os.makedirs(upload_folder, exist_ok=True)
             filepath = os.path.join(upload_folder, temp_filename)
 

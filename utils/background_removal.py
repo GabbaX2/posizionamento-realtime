@@ -4,170 +4,121 @@ import io
 import base64
 import numpy as np
 import cv2
+import logging
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def remove_background(image_data):
+# ---------- Helpers ----------
+def _ensure_rgb(pil_img):
+    if pil_img.mode in ("RGBA", "LA"):
+        return pil_img.convert("RGB")
+    if pil_img.mode != "RGB":
+        return pil_img.convert("RGB")
+    return pil_img
+
+def _auto_contrast_and_denoise_cv(img_bgr):
+    img = img_bgr.copy()
+    img = cv2.bilateralFilter(img, d=9, sigmaColor=75, sigmaSpace=75)
+    ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+    ycrcb[:, :, 0] = cv2.equalizeHist(ycrcb[:, :, 0])
+    img = cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
+    return img
+
+def _resize_for_speed(pil_img, max_dim=1024):
+    w, h = pil_img.size
+    max_current = max(w, h)
+    if max_current <= max_dim:
+        return pil_img, 1.0
+    scale = max_dim / float(max_current)
+    new_size = (int(w * scale), int(h * scale))
+    return pil_img.resize(new_size, Image.LANCZOS), scale
+
+# ---------- GrabCut fallback ----------
+def grabcut_fallback_bgra(input_bgr, iter_count=5):
+    h, w = input_bgr.shape[:2]
+    mask = np.zeros((h, w), np.uint8)
+    rect = (int(w*0.05), int(h*0.05), int(w*0.9), int(h*0.9))
+    bgdModel = np.zeros((1, 65), np.float64)
+    fgdModel = np.zeros((1, 65), np.float64)
+    try:
+        cv2.grabCut(input_bgr, mask, rect, bgdModel, fgdModel, iter_count, cv2.GC_INIT_WITH_RECT)
+        mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+        bgr = input_bgr.copy() * mask2[:, :, None]
+        alpha = (mask2 * 255).astype('uint8')
+        bgra = cv2.cvtColor(bgr, cv2.COLOR_BGR2BGRA)
+        bgra[:, :, 3] = alpha
+        return bgra
+    except Exception:
+        logger.exception("GrabCut fallback failed")
+        return None
+
+# ---------- Main ----------
+def remove_background_from_pil(pil_image, use_preprocess=True, resize_max=1024, grabcut_if_failed=True):
     """
-    Rimuove lo sfondo da un'immagine in formato base64
-    
-    Args:
-        image_data: immagine in formato base64 (con o senza prefisso data:image)
-    
-    Returns:
-        str: immagine con sfondo rimosso in formato base64 (solo base64, senza prefisso)
-        None: in caso di errore
+    Input: PIL Image
+    Output: (PIL Image in RGBA, metodo_usato) oppure (None, None)
     """
     try:
-        # Se l'immagine è in base64 con prefisso, rimuovilo
-        if isinstance(image_data, str):
-            if ',' in image_data:
-                image_data = image_data.split(',')[1]
-            image_bytes = base64.b64decode(image_data)
+        pil_image = _ensure_rgb(pil_image)
+        pil_small, scale = _resize_for_speed(pil_image, max_dim=resize_max)
+
+        out_small = None
+        method_used = None
+
+        # STEP 1: rembg con modello più robusto
+        try:
+            out_small = remove(pil_small, model_name="isnet-general-use")
+            method_used = "rembg-isnet"
+        except Exception:
+            logger.exception("rembg.remove ha sollevato un'eccezione")
+            out_small = None
+
+        if out_small is not None:
+            if out_small.mode != "RGBA":
+                out_small = out_small.convert("RGBA")
+            alpha = np.array(out_small.split()[-1])
+            if np.count_nonzero(alpha > 10) < 10:
+                logger.info("rembg ha prodotto alpha vuoto, passo al fallback")
+                out_small = None
+
+        # STEP 2: fallback GrabCut
+        grabcut_mask = None
+        if grabcut_if_failed or out_small is None:
+            img_bgr = cv2.cvtColor(np.array(pil_small), cv2.COLOR_RGB2BGR)
+            if use_preprocess:
+                img_bgr = _auto_contrast_and_denoise_cv(img_bgr)
+            bgra_small = grabcut_fallback_bgra(img_bgr)
+            if bgra_small is not None:
+                grabcut_img = Image.fromarray(cv2.cvtColor(bgra_small, cv2.COLOR_BGRA2RGBA))
+                grabcut_mask = np.array(grabcut_img.split()[-1])
+                if out_small is None:
+                    out_small = grabcut_img
+                    method_used = "grabcut"
+                else:
+                    alpha_rembg = np.array(out_small.split()[-1])
+                    fused_alpha = cv2.bitwise_or(alpha_rembg, grabcut_mask)
+                    out_small.putalpha(Image.fromarray(fused_alpha))
+                    method_used = "rembg+grabcut"
+
+        # STEP 3: resize back
+        if scale != 1.0 and out_small is not None:
+            orig_w, orig_h = pil_image.size
+            out_full = out_small.resize((orig_w, orig_h), Image.LANCZOS)
         else:
-            image_bytes = image_data
-        
-        # Apri l'immagine
-        input_image = Image.open(io.BytesIO(image_bytes))
-        
-        # Rimuovi lo sfondo
-        output_image = remove(input_image)
-        
-        # Converti in base64
-        buffered = io.BytesIO()
-        output_image.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode()
-        
-        return img_base64
-    except Exception as e:
-        print(f"[ERROR] Errore nella rimozione dello sfondo: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
+            out_full = out_small
 
+        if out_full is None:
+            return None, None
 
-def remove_background_from_file(file):
-    """
-    Rimuove lo sfondo da un file caricato (Flask request.files)
-    
-    Args:
-        file: file object da Flask request.files
-    
-    Returns:
-        str: immagine con sfondo rimosso in formato base64 (solo base64, senza prefisso)
-        None: in caso di errore
-    """
-    try:
-        # Leggi il file
-        image_bytes = file.read()
-        
-        # Apri l'immagine
-        input_image = Image.open(io.BytesIO(image_bytes))
-        
-        # Rimuovi lo sfondo
-        output_image = remove(input_image)
-        
-        # Converti in base64
-        buffered = io.BytesIO()
-        output_image.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode()
-        
-        return img_base64
-    except Exception as e:
-        print(f"[ERROR] Errore nella rimozione dello sfondo dal file: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
+        # STEP 4: post-processing maschera
+        alpha = np.array(out_full.split()[-1])
+        kernel = np.ones((5, 5), np.uint8)
+        alpha = cv2.morphologyEx(alpha, cv2.MORPH_CLOSE, kernel, iterations=2)
+        alpha = cv2.dilate(alpha, kernel, iterations=1)
+        out_full.putalpha(Image.fromarray(alpha))
 
-
-def remove_background_from_cv2_image(image):
-    """
-    Rimuove lo sfondo da un'immagine OpenCV (numpy array)
-    
-    Args:
-        image: immagine OpenCV (numpy array BGR)
-    
-    Returns:
-        numpy.ndarray: immagine con sfondo rimosso (BGRA con alpha channel)
-        None: in caso di errore
-    """
-    try:
-        # Converti BGR a RGB
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
-        # Converti in PIL Image
-        pil_image = Image.fromarray(image_rgb)
-        
-        # Rimuovi lo sfondo
-        output_image = remove(pil_image)
-        
-        # Converti di nuovo in OpenCV (BGRA)
-        output_array = np.array(output_image)
-        
-        # Se l'immagine ha 4 canali (RGBA), convertila in BGRA per OpenCV
-        if output_array.shape[2] == 4:
-            output_bgra = cv2.cvtColor(output_array, cv2.COLOR_RGBA2BGRA)
-            return output_bgra
-        else:
-            # Se per qualche motivo non ha alpha, aggiungi un canale alpha
-            output_bgr = cv2.cvtColor(output_array, cv2.COLOR_RGB2BGR)
-            return output_bgr
-            
-    except Exception as e:
-        print(f"[ERROR] Errore nella rimozione dello sfondo da immagine CV2: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-
-def create_white_background_image(image_with_alpha):
-    """
-    Sostituisce lo sfondo trasparente con uno sfondo bianco
-    Utile per la detection che funziona meglio con sfondi uniformi
-    
-    Args:
-        image_with_alpha: immagine BGRA con canale alpha
-    
-    Returns:
-        numpy.ndarray: immagine BGR con sfondo bianco
-    """
-    try:
-        # Crea uno sfondo bianco
-        white_bg = np.ones_like(image_with_alpha[:, :, :3]) * 255
-        
-        # Estrai il canale alpha e normalizzalo
-        alpha = image_with_alpha[:, :, 3:4] / 255.0
-        
-        # Blend l'immagine con lo sfondo bianco usando il canale alpha
-        result = (image_with_alpha[:, :, :3] * alpha + white_bg * (1 - alpha)).astype(np.uint8)
-        
-        return result
-    except Exception as e:
-        print(f"[ERROR] Errore nella creazione dello sfondo bianco: {e}")
-        return image_with_alpha[:, :, :3] if image_with_alpha.shape[2] == 4 else image_with_alpha
-
-
-def create_colored_background_image(image_with_alpha, color=(255, 255, 255)):
-    """
-    Sostituisce lo sfondo trasparente con un colore specifico
-    
-    Args:
-        image_with_alpha: immagine BGRA con canale alpha
-        color: tupla BGR del colore di sfondo (default: bianco)
-    
-    Returns:
-        numpy.ndarray: immagine BGR con sfondo colorato
-    """
-    try:
-        # Crea uno sfondo del colore specificato
-        colored_bg = np.full_like(image_with_alpha[:, :, :3], color, dtype=np.uint8)
-        
-        # Estrai il canale alpha e normalizzalo
-        alpha = image_with_alpha[:, :, 3:4] / 255.0
-        
-        # Blend l'immagine con lo sfondo colorato usando il canale alpha
-        result = (image_with_alpha[:, :, :3] * alpha + colored_bg * (1 - alpha)).astype(np.uint8)
-        
-        return result
-    except Exception as e:
-        print(f"[ERROR] Errore nella creazione dello sfondo colorato: {e}")
-        return image_with_alpha[:, :, :3] if image_with_alpha.shape[2] == 4 else image_with_alpha
+        return out_full.convert("RGBA"), method_used
+    except Exception:
+        logger.exception("Errore in remove_background_from_pil")
+        return None, None

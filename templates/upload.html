@@ -59,6 +59,23 @@
                             </div>
                         </div>
 
+                        <!-- Background Removal Option -->
+                        <div class="mb-4">
+                            <div class="card border-info">
+                                <div class="card-body">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="removeBackground" checked>
+                                        <label class="form-check-label fw-semibold" for="removeBackground">
+                                            <i class="bi bi-scissors me-2 text-info"></i>Rimuovi automaticamente lo sfondo
+                                        </label>
+                                        <div class="form-text mt-2">
+                                            Lo sfondo verrà rimosso automaticamente per migliorare l'analisi dei sensori
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- File Upload -->
                         <div class="mb-4">
                             <label for="referenceImage" class="form-label fw-semibold text-dark mb-3">
@@ -89,6 +106,27 @@
                                 <div class="alert alert-info d-flex align-items-center py-2">
                                     <i class="bi bi-info-circle me-2 flex-shrink-0"></i>
                                     <span id="fileName" class="fs-7"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Processing Status -->
+                        <div id="processingStatus" class="mb-4" style="display: none;">
+                            <div class="card border-warning">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <div class="spinner-border spinner-border-sm text-warning me-3" role="status">
+                                            <span class="visually-hidden">Elaborazione...</span>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-1 fw-semibold" id="processingTitle">Elaborazione in corso...</h6>
+                                            <small class="text-muted" id="processingMessage">Attendere prego</small>
+                                        </div>
+                                    </div>
+                                    <div class="progress mt-3" style="height: 6px;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                                             role="progressbar" style="width: 0%" id="processingProgress"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -375,7 +413,7 @@
 </style>
 
 <script>
-    console.log('🚀 Inizializzazione upload.html - versione semplificata (solo caricamento)');
+    console.log('🚀 Inizializzazione upload.html - versione con rimozione background');
 
     function clearOldReference() {
         try {
@@ -392,7 +430,7 @@
         try {
             const imageData = imageBase64.startsWith('data:')
                 ? imageBase64
-                : `data:image/jpeg;base64,${imageBase64}`;
+                : `data:image/png;base64,${imageBase64}`;
 
             localStorage.setItem('referenceImage', imageData);
             localStorage.setItem('referenceMetadata', JSON.stringify(metadata));
@@ -410,6 +448,69 @@
                 console.error('❌ Errore salvataggio localStorage:', error);
             }
             return false;
+        }
+    }
+
+    // Funzione per rimuovere lo sfondo
+    async function removeImageBackground(imageBase64) {
+        console.log('🔄 Invio richiesta rimozione sfondo...');
+
+        updateProcessingStatus('Rimozione sfondo in corso...', 'Elaborazione con AI...', 30);
+
+        try {
+            const response = await fetch('/api/remove_background', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    image_base64: imageBase64,
+                    use_preprocess: true,
+                    resize_max: 1024,
+                    grabcut_if_failed: true
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                console.log('✅ Sfondo rimosso con successo usando:', result.method);
+                updateProcessingStatus('Sfondo rimosso!', `Metodo: ${result.method}`, 60);
+                return result.image_base64;
+            } else {
+                console.error('❌ Errore rimozione sfondo:', result.error);
+                showWarning('⚠️ Impossibile rimuovere lo sfondo, uso immagine originale');
+                return imageBase64;
+            }
+        } catch (error) {
+            console.error('❌ Errore durante la rimozione dello sfondo:', error);
+            showWarning('⚠️ Errore nella rimozione sfondo, uso immagine originale');
+            return imageBase64;
+        }
+    }
+
+    function updateProcessingStatus(title, message, progress) {
+        const statusDiv = document.getElementById('processingStatus');
+        const titleEl = document.getElementById('processingTitle');
+        const messageEl = document.getElementById('processingMessage');
+        const progressBar = document.getElementById('processingProgress');
+
+        if (statusDiv && titleEl && messageEl && progressBar) {
+            statusDiv.style.display = 'block';
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+            progressBar.style.width = progress + '%';
+        }
+    }
+
+    function hideProcessingStatus() {
+        const statusDiv = document.getElementById('processingStatus');
+        if (statusDiv) {
+            statusDiv.style.display = 'none';
         }
     }
 
@@ -558,11 +659,12 @@
 
         // Form submission
         if (uploadForm) {
-            uploadForm.addEventListener('submit', function (e) {
+            uploadForm.addEventListener('submit', async function (e) {
                 e.preventDefault();
 
                 const uploadBtn = document.getElementById('uploadBtn');
                 const uploadSpinner = document.getElementById('uploadSpinner');
+                const removeBackgroundCheckbox = document.getElementById('removeBackground');
 
                 if (!fileInput.files || fileInput.files.length === 0) {
                     showError('❌ Seleziona un\'immagine prima di caricare');
@@ -571,137 +673,195 @@
 
                 clearOldReference();
 
-                // Show spinner
+                // Show spinner and disable button
                 uploadBtn.disabled = true;
                 uploadSpinner.classList.remove('d-none');
+                updateProcessingStatus('Preparazione...', 'Lettura file...', 10);
 
-                // Create FormData
-                const formData = new FormData();
-                formData.append('file', fileInput.files[0]);
-                formData.append('limb_type', document.querySelector('input[name="limb_type"]:checked').value);
+                try {
+                    // Get limb type
+                    const limbType = document.querySelector('input[name="limb_type"]:checked').value;
 
-                // Upload to server
-                fetch('/api/upload_reference', {
-                    method: 'POST',
-                    body: formData
-                })
-                    .then(res => res.json())
-                    .then(result => {
-                        uploadBtn.disabled = false;
-                        uploadSpinner.classList.add('d-none');
+                    // Read file as base64
+                    const file = fileInput.files[0];
+                    let imageBase64 = await fileToBase64(file);
 
-                        if (result.success) {
-                            console.log('✅ Upload completato:', result);
+                    // Remove background if enabled
+                    if (removeBackgroundCheckbox.checked) {
+                        console.log('🔄 Rimozione sfondo abilitata');
+                        imageBase64 = await removeImageBackground(imageBase64);
+                    } else {
+                        console.log('ℹ️ Rimozione sfondo disabilitata');
+                        updateProcessingStatus('Preparazione completata', 'Sfondo non rimosso', 60);
+                    }
 
-                            const metadata = {
-                                limbType: result.limb_type || limbType,
-                                fileName: result.filename,
-                                uploadDate: new Date().toISOString(),
-                                session_id: result.session_id,
-                                fileSize: fileInput.files[0].size
-                            };
+                    // Update preview with processed image
+                    const previewImg = document.getElementById('previewImage');
+                    if (previewImg) {
+                        previewImg.src = imageBase64;
+                    }
 
-                            const saved = saveReferenceToLocalStorage(result.preview_image, metadata);
+                    updateProcessingStatus('Caricamento sul server...', 'Invio dati...', 70);
 
-                            if (!saved) {
-                                showWarning('⚠️ Upload riuscito ma impossibile salvare nel localStorage locale');
-                            }
+                    // Create FormData for server upload
+                    const formData = new FormData();
 
-                            // Show success banner at top of preview
-                            const previewDiv = document.getElementById('referencePreview');
-                            const successBanner = `
-                        <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-check-circle-fill fs-3 me-3"></i>
-                                <div>
-                                    <h5 class="alert-heading mb-1">Immagine Caricata con Successo!</h5>
-                                    <p class="mb-0">Il tuo riferimento è stato salvato correttamente.</p>
-                                </div>
-                            </div>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    `;
+                    // Convert base64 back to blob for upload
+                    const blob = await base64ToBlob(imageBase64);
+                    formData.append('file', blob, file.name);
+                    formData.append('limb_type', limbType);
 
-                            // Insert banner before preview card
-                            previewDiv.insertAdjacentHTML('afterbegin', successBanner);
-
-                            // Also show notification
-                            showSuccess('✅ Immagine caricata con successo!');
-
-                            // Scroll to preview
-                            previewDiv.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'start'
-                            });
-
-                            // Add success styling to preview card
-                            const previewCard = previewDiv.querySelector('.card');
-                            if (previewCard) {
-                                previewCard.classList.add('border-success');
-                                previewCard.style.borderWidth = '2px';
-                            }
-                        } else {
-                            console.error('❌ Upload fallito:', result.error);
-                            showError('❌ Errore: ' + result.error);
-                        }
-                    })
-                    .catch(error => {
-                        uploadBtn.disabled = false;
-                        uploadSpinner.classList.add('d-none');
-                        console.error('❌ Errore durante l\'upload:', error);
-                        showError('❌ Errore durante l\'upload: ' + error.message);
+                    // Upload to server
+                    const response = await fetch('/api/upload_reference', {
+                        method: 'POST',
+                        body: formData
                     });
-            });
 
-            window.clearAllReferenceData = function () {
-                if (confirm('Sei sicuro di voler cancellare tutti i dati di riferimento salvati?')) {
-                    clearOldReference();
-
-                    const previewDiv = document.getElementById('referencePreview');
-                    if (previewDiv) {
-                        previewDiv.style.display = 'none';
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
 
-                    const uploadForm = document.getElementById('uploadForm');
-                    if (uploadForm) {
-                        uploadForm.reset();
-                    }
+                    const result = await response.json();
 
-                    const fileInfo = document.getElementById('fileInfo');
-                    if (fileInfo) {
-                        fileInfo.style.display = 'none';
+                    updateProcessingStatus('Salvataggio locale...', 'Quasi fatto...', 90);
+
+                    if (result.success) {
+                        console.log('✅ Upload completato:', result);
+
+                        const metadata = {
+                            limbType: result.limb_type || limbType,
+                            fileName: result.filename,
+                            uploadDate: new Date().toISOString(),
+                            session_id: result.session_id,
+                            fileSize: file.size,
+                            backgroundRemoved: removeBackgroundCheckbox.checked
+                        };
+
+                        // Save processed image to localStorage
+                        const saved = saveReferenceToLocalStorage(imageBase64, metadata);
+
+                        if (!saved) {
+                            showWarning('⚠️ Upload riuscito ma impossibile salvare nel localStorage locale');
+                        }
+
+                        updateProcessingStatus('Completato!', 'Tutto pronto', 100);
+
+                        // Show success banner
+                        const previewDiv = document.getElementById('referencePreview');
+                        const successBanner = `
+                            <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-check-circle-fill fs-3 me-3"></i>
+                                    <div>
+                                        <h5 class="alert-heading mb-1">Immagine Caricata con Successo!</h5>
+                                        <p class="mb-0">Il tuo riferimento è stato salvato${removeBackgroundCheckbox.checked ? ' e lo sfondo è stato rimosso' : ''} correttamente.</p>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        `;
+
+                        previewDiv.insertAdjacentHTML('afterbegin', successBanner);
+                        showSuccess('✅ Immagine caricata con successo!');
+
+                        // Scroll to preview
+                        previewDiv.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+
+                        // Add success styling
+                        const previewCard = previewDiv.querySelector('.card');
+                        if (previewCard) {
+                            previewCard.classList.remove('border-info');
+                            previewCard.classList.add('border-success');
+                            previewCard.style.borderWidth = '2px';
+                        }
+
+                        // Hide processing status after delay
+                        setTimeout(hideProcessingStatus, 2000);
+                    } else {
+                        console.error('❌ Upload fallito:', result.error);
+                        showError('❌ Errore: ' + result.error);
+                        hideProcessingStatus();
                     }
-                    showSuccess('🗑️ Tutti i dati di riferimento sono stati cancellati!');
+                } catch (error) {
+                    console.error('❌ Errore durante il processo:', error);
+                    showError('❌ Errore: ' + error.message);
+                    hideProcessingStatus();
+                } finally {
+                    uploadBtn.disabled = false;
+                    uploadSpinner.classList.add('d-none');
                 }
-            }
+            });
         }
+
+        // Clear reference function
+        window.clearAllReferenceData = function () {
+            if (confirm('Sei sicuro di voler cancellare tutti i dati di riferimento salvati?')) {
+                clearOldReference();
+
+                const previewDiv = document.getElementById('referencePreview');
+                if (previewDiv) {
+                    previewDiv.style.display = 'none';
+                }
+
+                const uploadForm = document.getElementById('uploadForm');
+                if (uploadForm) {
+                    uploadForm.reset();
+                }
+
+                const fileInfo = document.getElementById('fileInfo');
+                if (fileInfo) {
+                    fileInfo.style.display = 'none';
+                }
+
+                hideProcessingStatus();
+                showSuccess('🗑️ Tutti i dati di riferimento sono stati cancellati!');
+            }
+        };
+    }
+
+    // Helper function to convert file to base64
+    function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // Helper function to convert base64 to blob
+    async function base64ToBlob(base64Data) {
+        const response = await fetch(base64Data);
+        return await response.blob();
     }
 
     function updateImageInfo(file, limbType) {
         const previewInfo = document.getElementById('previewInfo');
-
         const fileSize = (file.size / 1024 / 1024).toFixed(2);
 
         previewInfo.innerHTML = `
-        <div class="col-md-4 col-6">
-            <div class="preview-stats h-100">
-                <span class="stat-value text-primary">${file.name}</span>
-                <span class="stat-label">Nome File</span>
+            <div class="col-md-4 col-6">
+                <div class="preview-stats h-100">
+                    <span class="stat-value text-primary">${file.name}</span>
+                    <span class="stat-label">Nome File</span>
+                </div>
             </div>
-        </div>
-        <div class="col-md-4 col-6">
-            <div class="preview-stats h-100">
-                <span class="stat-value text-success">${fileSize} MB</span>
-                <span class="stat-label">Dimensione</span>
+            <div class="col-md-4 col-6">
+                <div class="preview-stats h-100">
+                    <span class="stat-value text-success">${fileSize} MB</span>
+                    <span class="stat-label">Dimensione</span>
+                </div>
             </div>
-        </div>
-        <div class="col-md-4 col-12">
-            <div class="preview-stats h-100">
-                <span class="stat-value text-info">${limbType === 'arm' ? 'Braccio' : 'Gamba'}</span>
-                <span class="stat-label">Tipo di Arto</span>
+            <div class="col-md-4 col-12">
+                <div class="preview-stats h-100">
+                    <span class="stat-value text-info">${limbType === 'arm' ? 'Braccio' : 'Gamba'}</span>
+                    <span class="stat-label">Tipo di Arto</span>
+                </div>
             </div>
-        </div>
-    `;
+        `;
     }
 
     function initializeImageModal() {
@@ -829,13 +989,20 @@
         const uploadResult = document.getElementById('uploadResult');
         if (!uploadResult) return;
 
+        const iconMap = {
+            'success': 'check-circle',
+            'danger': 'x-circle',
+            'warning': 'exclamation-triangle',
+            'info': 'info-circle'
+        };
+
         const alertHTML = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'x-circle' : 'exclamation-triangle'} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    `;
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <i class="bi bi-${iconMap[type] || 'info-circle'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
 
         uploadResult.innerHTML = alertHTML;
 
@@ -849,6 +1016,6 @@
         }, 5000);
     }
 
-    console.log('✅ Script upload.html caricato completamente');
+    console.log('✅ Script upload.html con rimozione background caricato completamente');
 </script>
 {% endblock %}

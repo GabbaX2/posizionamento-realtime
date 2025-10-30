@@ -4,10 +4,18 @@ import json
 import base64
 import numpy as np
 import cv2
+import logging
 
 from config import Config
 from services.validation_service import ValidationService
 from utils.image_processing import encode_image_to_base64
+from utils.background_removal import remove_background_base64, remove_background_from_pil
+from PIL import Image
+import io
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -41,7 +49,7 @@ def check_reference_exists(session_id):
             }
 
     except Exception as e:
-        print(f"Errore nel verificare il riferimento: {str(e)}")
+        logger.error(f"Errore nel verificare il riferimento: {str(e)}")
         return {
             'success': False,
             'has_reference': False,
@@ -79,7 +87,7 @@ def api_upload_reference():
     Salva solo l'immagine originale
     """
     try:
-        print("[ROUTE] /api/upload_reference called - SIMPLE UPLOAD (no detection)")
+        logger.info("[ROUTE] /api/upload_reference called - SIMPLE UPLOAD (no detection)")
 
         # Verifica presenza file
         if 'file' not in request.files:
@@ -133,8 +141,8 @@ def api_upload_reference():
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f)
 
-        print(f"✅ Immagine salvata: {file.filename}, Tipo: {limb_type}")
-        print(f"   Path: {image_path}")
+        logger.info(f"✅ Immagine salvata: {file.filename}, Tipo: {limb_type}")
+        logger.info(f"   Path: {image_path}")
 
         return jsonify({
             'success': True,
@@ -146,13 +154,70 @@ def api_upload_reference():
         })
 
     except Exception as e:
-        print(f"[ERROR] Route /api/upload_reference failed: {e}")
+        logger.error(f"[ERROR] Route /api/upload_reference failed: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
             'success': False,
             'error': f'Errore server: {str(e)}'
         }), 500
+
+
+@app.route('/api/remove_background', methods=['POST'])
+def api_remove_background():
+    """
+    Endpoint per rimuovere lo sfondo da un'immagine
+    """
+    try:
+        logger.info("[ROUTE] /api/remove_background called")
+        data = request.get_json()
+
+        if not data or 'image_base64' not in data:
+            return jsonify({'success': False, 'error': 'Parametro image_base64 mancante'}), 400
+
+        image_base64 = data.get('image_base64')
+        use_preprocess = data.get('use_preprocess', True)
+        resize_max = data.get('resize_max', 1024)
+        grabcut_if_failed = data.get('grabcut_if_failed', True)
+
+        # Decodifica immagine
+        try:
+            if isinstance(image_base64, str) and ',' in image_base64:
+                image_base64 = image_base64.split(',', 1)[1]
+            image_bytes = base64.b64decode(image_base64)
+            pil_img = Image.open(io.BytesIO(image_bytes))
+        except Exception:
+            return jsonify({'success': False, 'error': 'Immagine non valida'}), 400
+
+        # Rimozione sfondo
+        out_pil, method = remove_background_from_pil(
+            pil_img,
+            use_preprocess=use_preprocess,
+            resize_max=resize_max,
+            grabcut_if_failed=grabcut_if_failed
+        )
+
+        if out_pil is not None:
+            buf = io.BytesIO()
+            out_pil.save(buf, format="PNG")
+            result_image = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+            logger.info(f"✅ Sfondo rimosso con successo usando {method}")
+
+            return jsonify({
+                'success': True,
+                'image_base64': result_image,
+                'method': method,
+                'message': 'Sfondo rimosso con successo'
+            })
+        else:
+            logger.warning("⚠️ Rimozione sfondo fallita")
+            return jsonify({'success': False, 'error': 'Impossibile rimuovere lo sfondo'}), 500
+
+    except Exception as e:
+        logger.error(f"[ERROR] Route /api/remove_background failed: {e}")
+        return jsonify({'success': False, 'error': f'Errore server: {str(e)}'}), 500
+
 
 
 @app.route('/api/validate_frame', methods=['POST'])
@@ -162,11 +227,11 @@ def api_validate_frame():
     Riceve il frame corrente e l'immagine di riferimento in base64
     """
     try:
-        print("[ROUTE] /api/validate_frame called")
+        logger.info("[ROUTE] /api/validate_frame called")
         result = validation_service.validate_current_frame(request)
         return jsonify(result)
     except Exception as e:
-        print(f"[ERROR] Route /api/validate_frame failed: {e}")
+        logger.error(f"[ERROR] Route /api/validate_frame failed: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -182,11 +247,11 @@ def api_get_validation_status():
     """
     try:
         session_id = request.args.get('session_id', 'default')
-        print(f"[ROUTE] /api/get_validation_status called for session: {session_id}")
+        logger.info(f"[ROUTE] /api/get_validation_status called for session: {session_id}")
         result = validation_service.get_validation_status(session_id)
         return jsonify(result)
     except Exception as e:
-        print(f"[ERROR] Route /api/get_validation_status failed: {e}")
+        logger.error(f"[ERROR] Route /api/get_validation_status failed: {e}")
         return jsonify({
             'success': False,
             'error': f'Errore server: {str(e)}'
@@ -207,7 +272,7 @@ def api_check_reference():
         return jsonify(result)
 
     except Exception as e:
-        print(f"[ERROR] Route /api/check_reference failed: {e}")
+        logger.error(f"[ERROR] Route /api/check_reference failed: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -240,7 +305,7 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Handler per errori 500"""
-    print(f"[ERROR 500] {error}")
+    logger.error(f"[ERROR 500] {error}")
     return jsonify({
         'success': False,
         'error': 'Errore interno del server'
@@ -272,10 +337,11 @@ if __name__ == '__main__':
     print(f"   • Upload folder: {app.config.get('UPLOAD_FOLDER', 'uploads')}")
 
     print("\n🌐 API Endpoints disponibili:")
-    print("   • POST /api/upload_reference       - Carica immagine riferimento")
-    print("   • POST /api/validate_frame         - Valida frame corrente")
-    print("   • GET  /api/get_validation_status  - Stato della validazione")
-    print("   • POST /api/check_reference        - Verifica esistenza riferimento")
+    print("   • POST /api/upload_reference        - Carica immagine riferimento")
+    print("   • POST /api/remove_background       - Rimuove sfondo da immagine")
+    print("   • POST /api/validate_frame          - Valida frame corrente")
+    print("   • GET  /api/get_validation_status   - Stato della validazione")
+    print("   • POST /api/check_reference         - Verifica esistenza riferimento")
 
     port = int(os.environ.get('PORT', 6000))
     print("\n🚀 Avvio applicazione Flask...")
