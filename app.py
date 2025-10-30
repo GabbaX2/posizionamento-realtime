@@ -9,7 +9,7 @@ import logging
 from config import Config
 from services.validation_service import ValidationService
 from utils.image_processing import encode_image_to_base64
-from utils.background_removal import remove_background_base64, remove_background_from_pil
+from utils.background_removal import remove_background_from_pil
 from PIL import Image
 import io
 
