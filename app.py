@@ -343,7 +343,7 @@ if __name__ == '__main__':
     print("   • GET  /api/get_validation_status   - Stato della validazione")
     print("   • POST /api/check_reference         - Verifica esistenza riferimento")
 
-    port = int(os.environ.get('PORT', 6000))
+    port = int(os.environ.get('PORT', 5000))
     print("\n🚀 Avvio applicazione Flask...")
     print(f"   URL: http://localhost:{port}")
     print(f"   URL locale: http://127.0.0.1:{port}")
@@ -351,4 +351,4 @@ if __name__ == '__main__':
     print("Premi CTRL+C per fermare il server")
     print("=" * 50 + "\n")
 
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(debug=True, host='127.0.0.0', port=port)

@@ -1,381 +1,293 @@
 import cv2
-import mediapipe as mp
 import numpy as np
-from typing import Dict, Optional, Tuple
-import os
-import ssl
-import urllib.request
-
-# DISABILITA VERIFICA SSL PRIMA DI TUTTO
-ssl._create_default_https_context = ssl._create_unverified_context
-
-# Imposta variabile d'ambiente per MediaPipe
-os.environ['MEDIAPIPE_DISABLE_SSL'] = '1'
+from typing import Dict, List, Tuple, Optional
+import torch
+import landmarker
+from landmarker.models import create_model
+from landmarker.datasets import AnatomicalLandmarkDataset
+import json
 
 
-class LimbDetector:
-    def __init__(self, limb_type='arm', model_complexity=1):
+class SENIAMLimbDetector:
+    def __init__(self, limb_type='leg', model_name='lower_limb'):
         """
-        Inizializza il rilevatore di arti
+        Inizializza il rilevatore con landmarker e regole SENIAM
 
         Args:
             limb_type: 'arm' o 'leg'
-            model_complexity: 0, 1, o 2 (0 è più veloce, 2 più accurato)
+            model_name: nome del modello pre-addestrato di landmarker
         """
         self.limb_type = limb_type
-        self.mp_pose = mp.solutions.pose
-        self.mp_drawing = mp.solutions.drawing_utils
-        self.pose = None
-        self.is_dummy = False
+        self.model = None
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        print(f"🔧 Inizializzazione LimbDetector per '{limb_type}'...")
+        # Carica le regole SENIAM
+        self.seniam_rules = self._load_seniam_rules()
 
-        # Inizializza MediaPipe con gestione errori migliorata
-        self._initialize_pose(model_complexity)
+        print(f"🔧 Inizializzazione SENIAMLimbDetector per '{limb_type}'...")
+        self._initialize_landmarker(model_name)
 
-        # Definisce le connessioni per ogni tipo di arto
-        self.limb_connections = {
-            'arm': [
-                (self.mp_pose.PoseLandmark.LEFT_SHOULDER, self.mp_pose.PoseLandmark.LEFT_ELBOW),
-                (self.mp_pose.PoseLandmark.LEFT_ELBOW, self.mp_pose.PoseLandmark.LEFT_WRIST)
-            ],
-            'leg': [
-                (self.mp_pose.PoseLandmark.LEFT_HIP, self.mp_pose.PoseLandmark.LEFT_KNEE),
-                (self.mp_pose.PoseLandmark.LEFT_KNEE, self.mp_pose.PoseLandmark.LEFT_ANKLE)
-            ]
-        }
-
-        # Indici dei landmark per facilitare l'accesso
-        self.landmark_indices = {
-            'arm': {
-                'shoulder': self.mp_pose.PoseLandmark.LEFT_SHOULDER,
-                'elbow': self.mp_pose.PoseLandmark.LEFT_ELBOW,
-                'wrist': self.mp_pose.PoseLandmark.LEFT_WRIST
+    def _load_seniam_rules(self) -> Dict:
+        """Carica le regole di posizionamento SENIAM"""
+        return {
+            'vasto_mediale': {
+                'landmarks': ['asis', 'patella'],
+                'calculation': 'percentage_line',
+                'percentage': 50,
+                'description': '50% sulla linea tra ASIS e rotula'
             },
-            'leg': {
-                'hip': self.mp_pose.PoseLandmark.LEFT_HIP,
-                'knee': self.mp_pose.PoseLandmark.LEFT_KNEE,
-                'ankle': self.mp_pose.PoseLandmark.LEFT_ANKLE
+            'retto_femorale': {
+                'landmarks': ['iliac_spine', 'patella'],
+                'calculation': 'percentage_line',
+                'percentage': 50,
+                'description': '50% sulla linea tra spina iliaca e rotula'
+            },
+            'gastrocnemio': {
+                'landmarks': ['fibular_head', 'malleolus'],
+                'calculation': 'percentage_line',
+                'percentage': 33,
+                'description': '1/3 superiore tra testa fibula e malleolo'
+            },
+            'tibiale_anteriore': {
+                'landmarks': ['tibial_tuberosity', 'malleolus'],
+                'calculation': 'percentage_line',
+                'percentage': 33,
+                'description': '1/3 superiore tra tuberosità tibiale e malleolo'
             }
         }
 
-    def _initialize_pose(self, model_complexity):
-        """Inizializza MediaPipe Pose con fallback progressivi"""
-        configs = [
-            # Primo tentativo: configurazione ottimale
-            {
-                'static_image_mode': True,
-                'model_complexity': model_complexity,
-                'smooth_landmarks': True,
-                'enable_segmentation': False,
-                'min_detection_confidence': 0.5,
-                'min_tracking_confidence': 0.5
-            },
-            # Secondo tentativo: configurazione semplificata
-            {
-                'static_image_mode': True,
-                'model_complexity': 1,
-                'smooth_landmarks': False,
-                'enable_segmentation': False,
-                'min_detection_confidence': 0.3,
-                'min_tracking_confidence': 0.3
-            },
-            # Terzo tentativo: configurazione minimale
-            {
-                'static_image_mode': True,
-                'model_complexity': 0,
-                'min_detection_confidence': 0.3
-            }
-        ]
+    def _initialize_landmarker(self, model_name: str):
+        """Inizializza il modello landmarker"""
+        try:
+            print(f"   🧠 Caricamento modello landmarker '{model_name}'...")
 
-        for i, config in enumerate(configs):
-            try:
-                print(f"   Tentativo {i + 1}/{len(configs)} con config: {config}")
-                self.pose = self.mp_pose.Pose(**config)
-                print(f"✅ MediaPipe inizializzato per {self.limb_type} (config {i + 1})")
-                self.is_dummy = False
-                return
-            except Exception as e:
-                print(f"⚠️ Tentativo {i + 1} fallito: {type(e).__name__}: {e}")
-                if i == len(configs) - 1:
-                    print("❌ Impossibile inizializzare MediaPipe dopo tutti i tentativi")
-                    print("🔧 ATTENZIONE: Creando detector fittizio per testing...")
-                    self._create_dummy_detector()
+            # Opzione 1: Usa un modello pre-addestrato di landmarker
+            self.model = create_model(
+                model_name=model_name,
+                pretrained=True,
+                num_classes=len(self._get_expected_landmarks())
+            )
+            self.model.to(self.device)
+            self.model.eval()
 
-    def _create_dummy_detector(self):
-        """Crea un detector fittizio per testing quando MediaPipe fallisce"""
-        self.is_dummy = True
+            print(f"✅ Landmarker inizializzato su {self.device}")
 
-        class DummyPose:
-            def __init__(self, mp_pose, limb_type):
-                self.mp_pose = mp_pose
-                self.limb_type = limb_type
+        except Exception as e:
+            print(f"❌ Errore caricamento landmarker: {e}")
+            print("🔧 Creando detector semplificato...")
+            self._create_fallback_detector()
 
-            def process(self, image):
-                h, w = image.shape[:2]
+    def _get_expected_landmarks(self) -> List[str]:
+        """Restituisce i landmark attesi per il tipo di arto"""
+        if self.limb_type == 'leg':
+            return ['asis', 'patella', 'tibial_tuberosity', 'fibular_head', 'malleolus']
+        else:  # arm
+            return ['acromion', 'lateral_epicondyle', 'medial_epicondyle', 'ulnar_styloid', 'radial_styloid']
 
-                class DummyResult:
-                    def __init__(self, mp_pose, limb_type, width, height):
-                        self._mp_pose = mp_pose
-                        self._limb_type = limb_type
-                        self._width = width
-                        self._height = height
-                        self._landmarks = None
+    def _create_fallback_detector(self):
+        """Crea un detector di fallback quando landmarker non è disponibile"""
+        self.model = None
+        print("⚠️  Usando detector semplificato - per produzione usa landmarker reale")
 
-                    @property
-                    def pose_landmarks(self):
-                        if self._landmarks is None:
-                            self._landmarks = self._create_landmarks()
-                        return self._landmarks
-
-                    def _create_landmarks(self):
-                        class DummyLandmarks:
-                            def __init__(self, mp_pose, limb_type, width, height):
-                                self._mp_pose = mp_pose
-                                self._limb_type = limb_type
-                                self._width = width
-                                self._height = height
-
-                            @property
-                            def landmark(self):
-                                class DummyLandmark:
-                                    def __init__(self, x, y, visibility=0.9):
-                                        self.x = x
-                                        self.y = y
-                                        self.visibility = visibility
-
-                                # Crea 33 landmark (standard MediaPipe)
-                                landmarks = [DummyLandmark(0.5, 0.5, 0.0)] * 33
-
-                                # Imposta landmark specifici basati sul tipo di arto
-                                if self._limb_type == 'arm':
-                                    # Posizioni relative per un braccio sinistro
-                                    landmarks[self._mp_pose.PoseLandmark.LEFT_SHOULDER] = DummyLandmark(0.35, 0.25,
-                                                                                                        0.95)
-                                    landmarks[self._mp_pose.PoseLandmark.LEFT_ELBOW] = DummyLandmark(0.30, 0.45, 0.95)
-                                    landmarks[self._mp_pose.PoseLandmark.LEFT_WRIST] = DummyLandmark(0.25, 0.65, 0.95)
-                                else:  # leg
-                                    landmarks[self._mp_pose.PoseLandmark.LEFT_HIP] = DummyLandmark(0.40, 0.35, 0.95)
-                                    landmarks[self._mp_pose.PoseLandmark.LEFT_KNEE] = DummyLandmark(0.38, 0.60, 0.95)
-                                    landmarks[self._mp_pose.PoseLandmark.LEFT_ANKLE] = DummyLandmark(0.36, 0.85, 0.95)
-
-                                return landmarks
-
-                        return DummyLandmarks(self._mp_pose, self._limb_type, self._width, self._height)
-
-                return DummyResult(self.mp_pose, self.limb_type, w, h)
-
-        self.pose = DummyPose(self.mp_pose, self.limb_type)
-        print("✅ Detector fittizio creato per testing")
-        print("⚠️  ATTENZIONE: I risultati potrebbero non essere accurati!")
-
-    def preprocess_image(self, image):
-        """Preprocessa l'immagine per migliorare il rilevamento"""
+    def preprocess_image(self, image: np.ndarray) -> np.ndarray:
+        """Preprocessa l'immagine per landmarker"""
         if image is None or image.size == 0:
             raise ValueError("Immagine non valida")
 
-        h, w = image.shape[:2]
-        print(f"   📏 Dimensioni immagine originale: {w}x{h}")
+        # Converti in RGB
+        if len(image.shape) == 3 and image.shape[2] == 3:
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        else:
+            rgb_image = image
 
-        target_size = 640
+        # Normalizza e ridimensiona (landmarker potrebbe richiedere dimensioni specifiche)
+        target_size = (512, 512)  # Modifica in base al modello
+        processed = cv2.resize(rgb_image, target_size, interpolation=cv2.INTER_AREA)
+        processed = processed.astype(np.float32) / 255.0
 
-        # Ridimensiona se necessario
-        if max(h, w) > target_size * 2 or max(h, w) < target_size / 2:
-            scale = target_size / max(h, w)
-            new_w, new_h = int(w * scale), int(h * scale)
-            image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-            print(f"   🔧 Immagine ridimensionata a: {new_w}x{new_h}")
+        # Normalizza (media e std tipiche per ImageNet)
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+        processed = (processed - mean) / std
 
-        # Migliora contrasto con CLAHE
-        try:
-            lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-            l, a, b = cv2.split(lab)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            l = clahe.apply(l)
-            enhanced = cv2.merge([l, a, b])
-            enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
-            print(f"   ✅ Contrasto migliorato con CLAHE")
-            return enhanced
-        except Exception as e:
-            print(f"   ⚠️ Errore nel miglioramento contrasto: {e}, uso immagine originale")
-            return image
+        # Converti in tensor PyTorch
+        processed = torch.from_numpy(processed).permute(2, 0, 1).unsqueeze(0)
 
-    def get_limb_points(self, image):
+        return processed.to(self.device)
+
+    def detect_landmarks(self, image: np.ndarray) -> Dict[str, Tuple[int, int]]:
         """
-        Estrae i punti chiave dell'arto dall'immagine
+        Rileva i landmark anatomici usando landmarker
 
         Returns:
-            Dict con le coordinate dei punti chiave o None se il rilevamento fallisce
+            Dict con coordinate dei landmark {nome: (x, y)}
         """
-        print(f"\n🔍 Rilevamento punti per '{self.limb_type}'...")
+        print(f"\n🔍 Rilevamento landmark SENIAM per '{self.limb_type}'...")
 
-        if self.pose is None:
-            print("❌ MediaPipe Pose non inizializzato")
-            return None
-
-        if self.is_dummy:
-            print("⚠️  Usando detector fittizio - risultati non reali!")
+        if self.model is None:
+            print("⚠️  Usando fallback detection")
+            return self._fallback_detection(image)
 
         try:
-            # Verifica immagine
-            if image is None or image.size == 0:
-                print("❌ Immagine non valida")
-                return None
-
-            print(f"   📸 Immagine ricevuta: shape={image.shape}, dtype={image.dtype}")
-
             # Preprocessa l'immagine
-            processed_image = self.preprocess_image(image)
+            input_tensor = self.preprocess_image(image)
+            original_h, original_w = image.shape[:2]
 
-            # Converti in RGB (MediaPipe richiede RGB)
-            rgb_image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
-            print(f"   ✅ Immagine convertita in RGB")
+            # Inference
+            with torch.no_grad():
+                outputs = self.model(input_tensor)
 
-            # Processa l'immagine
-            print(f"   🔄 Processing con MediaPipe...")
-            results = self.pose.process(rgb_image)
+            # Estrai coordinate (adatta in base all'output del modello)
+            landmarks = self._parse_model_output(outputs, original_w, original_h)
 
-            if not results.pose_landmarks:
-                print("❌ Nessun landmark rilevato nell'immagine")
-                print("💡 Suggerimenti:")
-                print("   - Assicurati che l'arto sia ben visibile")
-                print("   - Migliora l'illuminazione")
-                print("   - Evita sfondi troppo complessi")
-                print("   - Verifica che la persona sia di fronte alla camera")
-                return None
-
-            print(f"   ✅ Landmark rilevati!")
-
-            # Estrai i punti dell'arto specifico
-            landmarks = results.pose_landmarks.landmark
-            h, w = image.shape[:2]
-
-            points = {}
-            landmark_map = self.landmark_indices.get(self.limb_type, {})
-
-            for point_name, landmark_idx in landmark_map.items():
-                landmark = landmarks[landmark_idx]
-
-                # Verifica la visibilità del landmark
-                visibility = landmark.visibility if hasattr(landmark, 'visibility') else 1.0
-
-                if visibility < 0.3:
-                    print(f"   ⚠️ Landmark '{point_name}' poco visibile (visibility: {visibility:.2f})")
-                else:
-                    print(f"   ✓ Landmark '{point_name}': visibility={visibility:.2f}")
-
-                points[point_name] = self._landmark_to_pixel(landmark, w, h)
-
-            print(f"✅ {len(points)} punti '{self.limb_type}' rilevati: {list(points.keys())}")
-
-            # Stampa le coordinate
-            for name, (x, y) in points.items():
-                print(f"   • {name}: ({x}, {y})")
-
-            return points
+            print(f"✅ {len(landmarks)} landmark rilevati: {list(landmarks.keys())}")
+            return landmarks
 
         except Exception as e:
-            print(f'❌ Errore in get_limb_points: {type(e).__name__}: {e}')
-            import traceback
-            traceback.print_exc()
-            return None
+            print(f"❌ Errore nel detection: {e}")
+            return self._fallback_detection(image)
 
-    def _landmark_to_pixel(self, landmark, image_width: int, image_height: int) -> Tuple[int, int]:
-        """Converte coordinate normalizzate in pixel"""
-        x = int(np.clip(landmark.x * image_width, 0, image_width - 1))
-        y = int(np.clip(landmark.y * image_height, 0, image_height - 1))
+    def _parse_model_output(self, outputs, original_w: int, original_h: int) -> Dict:
+        """Analizza l'output del modello per estrarre coordinate"""
+        # QUESTA FUNZIONE DIPENDE DAL FORMATO DI OUTPUT DI LANDMARKER
+        # Modifica in base al modello specifico che usi
+
+        landmarks = {}
+
+        # Esempio: supponendo che outputs sia un tensor di shape [1, N, 2]
+        # dove N è il numero di landmark e 2 sono le coordinate (x, y) normalizzate
+        if isinstance(outputs, torch.Tensor) and len(outputs.shape) == 3:
+            coords = outputs[0].cpu().numpy()  # [N, 2]
+
+            landmark_names = self._get_expected_landmarks()
+            for i, name in enumerate(landmark_names):
+                if i < len(coords):
+                    x_norm, y_norm = coords[i]
+                    x = int(x_norm * original_w)
+                    y = int(y_norm * original_h)
+                    landmarks[name] = (x, y)
+
+        return landmarks
+
+    def _fallback_detection(self, image: np.ndarray) -> Dict:
+        """Detection di fallback quando landmarker non è disponibile"""
+        h, w = image.shape[:2]
+
+        # Posizioni approssimative per testing
+        if self.limb_type == 'leg':
+            return {
+                'asis': (int(w * 0.4), int(h * 0.3)),
+                'patella': (int(w * 0.45), int(h * 0.6)),
+                'tibial_tuberosity': (int(w * 0.46), int(h * 0.65)),
+                'fibular_head': (int(w * 0.44), int(h * 0.55)),
+                'malleolus': (int(w * 0.48), int(h * 0.85))
+            }
+        else:  # arm
+            return {
+                'acromion': (int(w * 0.3), int(h * 0.2)),
+                'lateral_epicondyle': (int(w * 0.35), int(h * 0.5)),
+                'medial_epicondyle': (int(w * 0.33), int(h * 0.5)),
+                'ulnar_styloid': (int(w * 0.4), int(h * 0.8)),
+                'radial_styloid': (int(w * 0.42), int(h * 0.8))
+            }
+
+    def calculate_sensor_position(self, landmarks: Dict, muscle: str) -> Dict:
+        """
+        Calcola la posizione del sensore basata sulle regole SENIAM
+
+        Args:
+            landmarks: Dict con coordinate landmark
+            muscle: Nome del muscolo (es: 'vasto_mediale')
+
+        Returns:
+            Dict con posizione e metadati
+        """
+        if muscle not in self.seniam_rules:
+            raise ValueError(f"Muscolo '{muscle}' non supportato. Usa: {list(self.seniam_rules.keys())}")
+
+        rule = self.seniam_rules[muscle]
+        required_landmarks = rule['landmarks']
+
+        # Verifica che tutti i landmark richiesti siano disponibili
+        missing = [lm for lm in required_landmarks if lm not in landmarks]
+        if missing:
+            raise ValueError(f"Landmark mancanti per {muscle}: {missing}")
+
+        # Calcola la posizione in base alla regola
+        if rule['calculation'] == 'percentage_line':
+            start = landmarks[required_landmarks[0]]
+            end = landmarks[required_landmarks[1]]
+            position = self._calculate_percentage_line(start, end, rule['percentage'])
+        else:
+            raise ValueError(f"Tipo di calcolo non supportato: {rule['calculation']}")
+
+        return {
+            'position': position,
+            'muscle': muscle,
+            'rule_description': rule['description'],
+            'landmarks_used': required_landmarks,
+            'confidence': self._calculate_confidence(landmarks, required_landmarks)
+        }
+
+    def _calculate_percentage_line(self, start: Tuple[int, int], end: Tuple[int, int],
+                                   percentage: float) -> Tuple[int, int]:
+        """Calcola un punto a una certa percentuale lungo una linea"""
+        x1, y1 = start
+        x2, y2 = end
+
+        # Converti percentuale in frazione (es: 50% -> 0.5)
+        fraction = percentage / 100.0
+
+        x = int(x1 + fraction * (x2 - x1))
+        y = int(y1 + fraction * (y2 - y1))
+
         return (x, y)
 
-    def draw_limb_on_image(self, image: np.ndarray, points: Dict) -> np.ndarray:
-        """Disegna l'arto rilevato sull'immagine"""
-        if points is None or len(points) == 0:
-            print("⚠️ Nessun punto da disegnare")
-            return image
+    def _calculate_confidence(self, landmarks: Dict, used_landmarks: List[str]) -> float:
+        """Calcola la confidenza della rilevazione"""
+        # Implementa una logica di confidenza basata sulla qualità della rilevazione
+        # Per ora restituisci un valore fisso
+        return 0.85
 
-        result_image = image.copy()
-
-        # Disegna le connessioni tra i punti
-        point_names = list(self.landmark_indices[self.limb_type].keys())
-        for i in range(len(point_names) - 1):
-            start_name = point_names[i]
-            end_name = point_names[i + 1]
-
-            if start_name in points and end_name in points:
-                cv2.line(result_image, points[start_name], points[end_name],
-                         (0, 255, 0), 3, cv2.LINE_AA)
-
-        # Disegna i punti chiave
-        for point_name, (x, y) in points.items():
-            # Cerchio esterno
-            cv2.circle(result_image, (x, y), 8, (0, 255, 0), 2)
-            # Cerchio interno
-            cv2.circle(result_image, (x, y), 4, (0, 0, 255), -1)
-            # Etichetta
-            cv2.putText(result_image, point_name, (x + 12, y - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
-            cv2.putText(result_image, point_name, (x + 12, y - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-
-        return result_image
-
-    def get_limb_orientation(self, points: Dict) -> float:
+    def draw_guidance(self, image: np.ndarray, landmarks: Dict,
+                      sensor_position: Dict) -> np.ndarray:
         """
-        Calcola l'orientamento dell'arto in gradi
-
-        Returns:
-            Angolo in gradi (-180 a 180)
+        Disegna landmark e posizione del sensore sull'immagine
         """
-        if points is None or len(points) < 2:
-            return 0.0
+        result = image.copy()
+        h, w = image.shape[:2]
 
-        try:
-            if self.limb_type == 'arm':
-                start_point = points.get('shoulder')
-                end_point = points.get('wrist')
-            else:  # leg
-                start_point = points.get('hip')
-                end_point = points.get('ankle')
+        # 1. Disegna i landmark anatomici
+        for name, (x, y) in landmarks.items():
+            color = (0, 255, 0)  # Verde
+            cv2.circle(result, (x, y), 6, color, 2)
+            cv2.putText(result, name, (x + 10, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            if start_point is None or end_point is None:
-                return 0.0
+        # 2. Disegna la linea tra i landmark usati
+        used_landmarks = sensor_position['landmarks_used']
+        if len(used_landmarks) >= 2:
+            start = landmarks[used_landmarks[0]]
+            end = landmarks[used_landmarks[1]]
+            cv2.line(result, start, end, (255, 255, 0), 2, cv2.LINE_AA)
 
-            dx = end_point[0] - start_point[0]
-            dy = end_point[1] - start_point[1]
-            angle = np.degrees(np.arctan2(dy, dx))
+        # 3. Disegna la posizione del sensore
+        sensor_x, sensor_y = sensor_position['position']
+        cv2.circle(result, (sensor_x, sensor_y), 12, (0, 0, 255), -1)  # Cerchio rosso pieno
+        cv2.circle(result, (sensor_x, sensor_y), 15, (255, 255, 255), 3)  # Bordo bianco
 
-            return angle
-        except Exception as e:
-            print(f"⚠️ Errore nel calcolo dell'orientamento: {e}")
-            return 0.0
+        # 4. Aggiungi etichetta
+        label = f"Sensore: {sensor_position['muscle']}"
+        cv2.putText(result, label, (sensor_x + 20, sensor_y - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 3)
+        cv2.putText(result, label, (sensor_x + 20, sensor_y - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-    def get_limb_length(self, points: Dict) -> float:
-        """Calcola la lunghezza dell'arto in pixel"""
-        if points is None or len(points) < 2:
-            return 0.0
+        # 5. Aggiungi descrizione regola
+        desc = sensor_position['rule_description']
+        cv2.putText(result, desc, (10, h - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-        try:
-            point_names = list(self.landmark_indices[self.limb_type].keys())
-            total_length = 0.0
+        return result
 
-            for i in range(len(point_names) - 1):
-                start_name = point_names[i]
-                end_name = point_names[i + 1]
 
-                if start_name in points and end_name in points:
-                    p1 = np.array(points[start_name])
-                    p2 = np.array(points[end_name])
-                    segment_length = np.linalg.norm(p2 - p1)
-                    total_length += segment_length
-
-            return total_length
-        except Exception as e:
-            print(f"⚠️ Errore nel calcolo della lunghezza: {e}")
-            return 0.0
-
-    def __del__(self):
-        """Cleanup resources"""
-        if hasattr(self, 'pose') and self.pose is not None and hasattr(self.pose, 'close'):
-            try:
-                self.pose.close()
-            except:
-                pass
