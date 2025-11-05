@@ -1,13 +1,12 @@
 from rembg import remove
 from PIL import Image
-import io
-import base64
 import numpy as np
 import cv2
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 # ---------- Helpers ----------
 def _ensure_rgb(pil_img):
@@ -17,6 +16,7 @@ def _ensure_rgb(pil_img):
         return pil_img.convert("RGB")
     return pil_img
 
+
 def _auto_contrast_and_denoise_cv(img_bgr):
     img = img_bgr.copy()
     img = cv2.bilateralFilter(img, d=9, sigmaColor=75, sigmaSpace=75)
@@ -24,6 +24,7 @@ def _auto_contrast_and_denoise_cv(img_bgr):
     ycrcb[:, :, 0] = cv2.equalizeHist(ycrcb[:, :, 0])
     img = cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
     return img
+
 
 def _resize_for_speed(pil_img, max_dim=1024):
     w, h = pil_img.size
@@ -34,11 +35,12 @@ def _resize_for_speed(pil_img, max_dim=1024):
     new_size = (int(w * scale), int(h * scale))
     return pil_img.resize(new_size, Image.LANCZOS), scale
 
+
 # ---------- GrabCut fallback ----------
 def grabcut_fallback_bgra(input_bgr, iter_count=5):
     h, w = input_bgr.shape[:2]
     mask = np.zeros((h, w), np.uint8)
-    rect = (int(w*0.05), int(h*0.05), int(w*0.9), int(h*0.9))
+    rect = (int(w * 0.05), int(h * 0.05), int(w * 0.9), int(h * 0.9))
     bgdModel = np.zeros((1, 65), np.float64)
     fgdModel = np.zeros((1, 65), np.float64)
     try:
@@ -52,6 +54,7 @@ def grabcut_fallback_bgra(input_bgr, iter_count=5):
     except Exception:
         logger.exception("GrabCut fallback failed")
         return None
+
 
 # ---------- Main ----------
 def remove_background_from_pil(pil_image, use_preprocess=True, resize_max=1024, grabcut_if_failed=True):

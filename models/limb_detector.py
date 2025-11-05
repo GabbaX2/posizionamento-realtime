@@ -1,8 +1,7 @@
 import cv2
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 import torch
-import json
 
 # Import landmarker in modo sicuro con fallback
 _LANDMARKER_AVAILABLE = False
@@ -48,26 +47,44 @@ class SENIAMLimbDetector:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.target_input_size = target_input_size  # (W, H) convention used in preprocess
 
+        # Mappa nome modello -> ordine/nome keypoints prodotto dal modello
+        # MODIFICATO: Aggiunti landmark posteriori per supportare le nuove regole
+        self.model_keypoint_map = {
+            'lower_limb': [
+                # Anteriori
+                'asis', 'patella', 'tibial_tuberosity', 'fibular_head',
+                # Laterali / Mediali
+                'malleolus_lateral', 'malleolus_medial', 'medial_condyle',
+                # Posteriori
+                'ischial_tuberosity'
+            ],
+            'upper_limb': [
+                'acromion', 'lateral_epicondyle', 'medial_epicondyle',
+                'ulnar_styloid', 'radial_styloid'
+            ]
+        }
+
         # Carica le regole SENIAM
         self.seniam_rules = self._load_seniam_rules()
-
-        # Mappa nome modello -> ordine/nome keypoints prodotto dal modello
-        self.model_keypoint_map = {
-            'lower_limb': ['asis', 'patella', 'tibial_tuberosity', 'fibular_head', 'malleolus'],
-            'upper_limb': ['acromion', 'lateral_epicondyle', 'medial_epicondyle', 'ulnar_styloid', 'radial_styloid']
-        }
 
         print(f"🔧 Inizializzazione SENIAMLimbDetector per '{limb_type}' con modello '{model_name}'...")
         self._initialize_landmarker(model_name)
 
     def _load_seniam_rules(self) -> Dict:
-        """Carica le regole di posizionamento SENIAM"""
+        """
+        Carica le regole di posizionamento SENIAM
+        MODIFICATO: Aggiunti 'biceps_femoris', 'semitendinosus'.
+                   Rinominato 'gastrocnemio' in 'gastrocnemio_laterale'.
+                   Aggiunto 'gastrocnemio_mediale'.
+                   Aggiornati landmark per 'tibiale_anteriore'.
+        """
         return {
+            # --- Quadricipiti (Anteriore) ---
             'vasto_mediale': {
-                'landmarks': ['asis', 'patella'],
+                'landmarks': ['asis', 'patella'],  # Nota: SENIAM usa il bordo mediale della rotula
                 'calculation': 'percentage_line',
-                'percentage': 50,
-                'description': '50% sulla linea tra ASIS e rotula'
+                'percentage': 80,  # 80% della linea, 5cm sopra la rotula
+                'description': '80% sulla linea tra ASIS e rotula'
             },
             'retto_femorale': {
                 'landmarks': ['asis', 'patella'],
@@ -75,17 +92,39 @@ class SENIAMLimbDetector:
                 'percentage': 50,
                 'description': '50% sulla linea tra spina iliaca e rotula'
             },
-            'gastrocnemio': {
-                'landmarks': ['fibular_head', 'malleolus'],
+
+            # --- Ischiocrurali (Posteriore) - AGGIUNTO ---
+            'biceps_femoris': {
+                'landmarks': ['ischial_tuberosity', 'fibular_head'],
+                'calculation': 'percentage_line',
+                'percentage': 50,
+                'description': '50% sulla linea tra tuberosità ischiatica e testa fibula'
+            },
+            'semitendinosus': {
+                'landmarks': ['ischial_tuberosity', 'medial_condyle'],
+                'calculation': 'percentage_line',
+                'percentage': 50,
+                'description': '50% sulla linea tra tuberosità ischiatica e condilo mediale'
+            },
+
+            # --- Polpaccio (Posteriore/Laterale) ---
+            'gastrocnemio_laterale': {  # MODIFICATO (era 'gastrocnemio')
+                'landmarks': ['fibular_head', 'malleolus_lateral'],
                 'calculation': 'percentage_line',
                 'percentage': 33,
-                'description': '1/3 superiore tra testa fibula e malleolo'
+                'description': '1/3 superiore tra testa fibula e malleolo laterale'
+            },
+            'gastrocnemio_mediale': {  # AGGIUNTO
+                'landmarks': ['medial_condyle', 'malleolus_medial'],
+                'calculation': 'percentage_line',
+                'percentage': 33,
+                'description': '1/3 superiore sulla linea mediale (condilo mediale -> malleolo mediale)'
             },
             'tibiale_anteriore': {
-                'landmarks': ['tibial_tuberosity', 'malleolus'],
+                'landmarks': ['tibial_tuberosity', 'malleolus_medial'],  # MODIFICATO
                 'calculation': 'percentage_line',
                 'percentage': 33,
-                'description': '1/3 superiore tra tuberosità tibiale e malleolo'
+                'description': '1/3 superiore tra tuberosità tibiale e malleolo mediale'
             }
         }
 
@@ -99,13 +138,22 @@ class SENIAMLimbDetector:
         try:
             print(f"   🧠 Caricamento modello landmarker '{model_name}'...")
 
+            # Lista attesa basata sul nome del modello
+            expected_landmarks = self.model_keypoint_map.get(model_name)
+            if expected_landmarks is None:
+                print(f"Attenzione: model_name '{model_name}' non in model_keypoint_map, uso fallback")
+                expected_landmarks = self._get_expected_landmarks()  # fallback a limb_type
+
+            num_kpts = len(expected_landmarks)
+            print(f"   -> Il modello deve rilevare {num_kpts} keypoints: {expected_landmarks}")
+
             # Prova diversi pattern di inizializzazione comuni
             try:
                 # Pattern 1: factory function con parametri
                 self.model = create_model(
                     model_name=model_name,
                     pretrained=True,
-                    num_classes=len(self._get_expected_landmarks())
+                    num_classes=num_kpts  # MODIFICATO: usa num_kpts
                 )
             except TypeError:
                 try:
@@ -128,17 +176,27 @@ class SENIAMLimbDetector:
             self._create_fallback_detector()
 
     def _get_expected_landmarks(self) -> List[str]:
-        """Restituisce i landmark attesi per il tipo di arto"""
+        """
+        Restituisce i landmark attesi per il tipo di arto.
+        Usa la mappa basata sul model_name se possibile, altrimenti sul limb_type.
+        """
+        # Prova prima a usare il nome del modello, è più specifico
+        if self.model_name in self.model_keypoint_map:
+            return self.model_keypoint_map[self.model_name]
+
+        # Fallback su limb_type (mappatura generica)
         if self.limb_type == 'leg':
-            return ['asis', 'patella', 'tibial_tuberosity', 'fibular_head', 'malleolus']
+            # MODIFICATO: Restituisce la lista completa (anteriore + posteriore)
+            return self.model_keypoint_map['lower_limb']
         else:  # arm
-            return ['acromion', 'lateral_epicondyle', 'medial_epicondyle', 'ulnar_styloid', 'radial_styloid']
+            return self.model_keypoint_map['upper_limb']
 
     def _create_fallback_detector(self):
         """Crea un detector di fallback quando landmarker non è disponibile"""
         self.model = None
         print("⚠️  Usando detector semplificato - per produzione usa landmarker reale")
 
+    # ... (preprocess_image non cambia) ...
     def preprocess_image(self, image: np.ndarray, target_size: Tuple[int, int] = None) -> Tuple[torch.Tensor, dict]:
         """
         Preprocessa l'immagine per landmarker restituendo anche meta per undo letterbox.
@@ -229,7 +287,8 @@ class SENIAMLimbDetector:
         - dict con chiavi 'heatmaps' o 'coords'
         """
         # Ottieni nomi expected dal mapping modello -> keypoints
-        landmark_names = self.model_keypoint_map.get(self.model_name, self._get_expected_landmarks())
+        # MODIFICATO: usa self._get_expected_landmarks() che ora è più robusto
+        landmark_names = self._get_expected_landmarks()
 
         coords_norm = None  # Nx2 array valori in input image space (0..1)
         scores = None
@@ -269,6 +328,13 @@ class SENIAMLimbDetector:
                 result[name] = {'xy': None, 'score': 0.0}
             return result
 
+        # Verifica che il numero di landmark combaci
+        if len(coords_norm) != len(landmark_names):
+            print(
+                f"⚠️ Attenzione: il modello ha restituito {len(coords_norm)} punti, ma se ne aspettavano {len(landmark_names)}.")
+            print(f"   Nomi attesi: {landmark_names}")
+            # Prova a continuare, ma potrebbe mappare nomi errati
+
         # Converti coords normalizzate rispetto all'input (letterboxed) nello spazio immagine originale
         coords_img = self._coords_to_image_space(coords_norm, meta)
 
@@ -282,10 +348,12 @@ class SENIAMLimbDetector:
                 else:
                     result[name] = {'xy': xy, 'score': float(score)}
             else:
+                # Questo succede se il modello ritorna meno punti di quelli attesi
                 result[name] = {'xy': None, 'score': 0.0}
 
         return result
 
+    # ... (_postprocess_heatmaps e _coords_to_image_space non cambiano) ...
     def _postprocess_heatmaps(self, heatmaps: torch.Tensor) -> Tuple[np.ndarray, np.ndarray]:
         """
         Estrae per ogni heatmap la posizione del massimo e la normalizza.
@@ -345,17 +413,26 @@ class SENIAMLimbDetector:
         return out
 
     def _fallback_detection(self, image: np.ndarray) -> Dict:
-        """Detection di fallback quando landmarker non è disponibile (coordinate raw)"""
+        """
+        Detection di fallback quando landmarker non è disponibile (coordinate raw)
+        MODIFICATO: Aggiunti i nuovi landmark per la gamba.
+        """
         h, w = image.shape[:2]
 
         # Posizioni approssimative per testing
         if self.limb_type == 'leg':
             return {
+                # Anteriori
                 'asis': (int(w * 0.4), int(h * 0.3)),
                 'patella': (int(w * 0.45), int(h * 0.6)),
                 'tibial_tuberosity': (int(w * 0.46), int(h * 0.65)),
-                'fibular_head': (int(w * 0.44), int(h * 0.55)),
-                'malleolus': (int(w * 0.48), int(h * 0.85))
+                'fibular_head': (int(w * 0.40), int(h * 0.62)),  # Laterale
+                # Mediali/Laterali
+                'malleolus_lateral': (int(w * 0.42), int(h * 0.88)),
+                'malleolus_medial': (int(w * 0.50), int(h * 0.88)),
+                'medial_condyle': (int(w * 0.52), int(h * 0.62)),  # Mediale
+                # Posteriori
+                'ischial_tuberosity': (int(w * 0.45), int(h * 0.35)),  # Posteriore
             }
         else:  # arm
             return {
@@ -366,6 +443,7 @@ class SENIAMLimbDetector:
                 'radial_styloid': (int(w * 0.42), int(h * 0.8))
             }
 
+    # ... (calculate_sensor_position, _calculate_percentage_line e draw_guidance non cambiano) ...
     def calculate_sensor_position(self, landmarks: Dict[str, Dict], muscle: str,
                                   min_score: float = 0.2) -> Dict:
         """
@@ -425,14 +503,15 @@ class SENIAMLimbDetector:
         return (x, y)
 
     def draw_guidance(self, image: np.ndarray, landmarks: Dict[str, Dict],
-                      sensor_position: Dict, low_conf_threshold: float = 0.2) -> np.ndarray:
+                      sensor_positions: Dict, low_conf_threshold: float = 0.2) -> np.ndarray:
         """
-        Disegna landmark e posizione del sensore sull'immagine.
+        Disegna landmark e TUTTE le posizioni dei sensori sull'immagine.
 
         Args:
             image: immagine originale
             landmarks: {name: {'xy': (x,y)|None, 'score': float}}
-            sensor_position: dict restituito da calculate_sensor_position
+            sensor_positions: dict PLURALE con le posizioni,
+                              es: {'biceps_femoris': {...}, 'semitendinosus': {...}}
             low_conf_threshold: soglia per colorare i punti a bassa confidenza
         """
         result = image.copy()
@@ -456,33 +535,65 @@ class SENIAMLimbDetector:
             cv2.putText(result, f"{name}:{score:.2f}", (x + 8, y - 8),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
 
-        # 2. Disegna la linea tra i landmark usati (se presenti)
-        used_landmarks = sensor_position.get('landmarks_used', [])
-        if len(used_landmarks) >= 2:
-            lm0 = landmarks.get(used_landmarks[0], {})
-            lm1 = landmarks.get(used_landmarks[1], {})
-            if lm0.get('xy') is not None and lm1.get('xy') is not None:
-                start = lm0['xy']
-                end = lm1['xy']
-                cv2.line(result, start, end, (255, 255, 0), 2, cv2.LINE_AA)
+        # Mappa dei colori (BGR per OpenCV)
+        sensor_colors = {
+            # Anteriori
+            'vasto_mediale': (255, 0, 0),  # Blu
+            'retto_femorale': (255, 0, 255),  # Magenta
+            'tibiale_anteriore': (0, 255, 0),  # Verde
+            # Posteriori / Laterali
+            'gastrocnemio_laterale': (0, 140, 255),  # Arancione
+            'gastrocnemio_mediale': (0, 140, 255),  # Arancione
+            'biceps_femoris': (0, 0, 255),  # Rosso
+            'semitendinosus': (0, 255, 255),  # Giallo
+        }
 
-        # 3. Disegna la posizione del sensore
-        sensor_xy = sensor_position.get('position')
-        if sensor_xy is not None:
+        all_descriptions = []
+
+        # 2-5. Loop su TUTTE le posizioni dei sensori calcolate
+        for muscle, sensor_info in sensor_positions.items():
+
+            if not sensor_info or sensor_info.get('position') is None:
+                continue
+
+            # 2. Disegna la linea tra i landmark usati
+            used_landmarks = sensor_info.get('landmarks_used', [])
+            if len(used_landmarks) >= 2:
+                lm0 = landmarks.get(used_landmarks[0], {})
+                lm1 = landmarks.get(used_landmarks[1], {})
+                if lm0.get('xy') is not None and lm1.get('xy') is not None:
+                    start = lm0['xy']
+                    end = lm1['xy']
+                    # Linea gialla per connessione
+                    cv2.line(result, start, end, (0, 255, 255), 2, cv2.LINE_AA)
+
+                    # 3. Disegna la posizione del sensore
+            sensor_xy = sensor_info.get('position')
             sensor_x, sensor_y = sensor_xy
-            cv2.circle(result, (sensor_x, sensor_y), 12, (0, 0, 255), -1)  # Cerchio rosso pieno
+            color = sensor_colors.get(muscle, (255, 255, 255))  # Bianco di default
+
+            cv2.circle(result, (sensor_x, sensor_y), 12, color, -1)  # Cerchio colorato pieno
             cv2.circle(result, (sensor_x, sensor_y), 15, (255, 255, 255), 3)  # Bordo bianco
 
             # 4. Aggiungi etichetta
-            label = f"Sensore: {sensor_position.get('muscle', '?')} ({sensor_position.get('confidence', 0.0):.2f})"
+            label = f"{muscle.replace('_', ' ')} ({sensor_info.get('confidence', 0.0):.2f})"
+            # Ombra per leggibilità
             cv2.putText(result, label, (sensor_x + 20, sensor_y - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 3)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 3)
             cv2.putText(result, label, (sensor_x + 20, sensor_y - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-        # 5. Aggiungi descrizione regola
-        desc = sensor_position.get('rule_description', '')
-        cv2.putText(result, desc, (10, h - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            # 5. Salva descrizione regola
+            desc = sensor_info.get('rule_description', '')
+            all_descriptions.append(f"{muscle.replace('_', ' ')}: {desc}")
+
+        # 5b. Disegna tutte le descrizioni in fondo
+        y_offset = h - 20
+        for desc in reversed(all_descriptions):  # Parti dal fondo
+            cv2.putText(result, desc, (10, y_offset),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3)  # Ombra nera
+            cv2.putText(result, desc, (10, y_offset),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)  # Testo bianco
+            y_offset -= 20  # Sposta in su per la prossima riga
 
         return result
