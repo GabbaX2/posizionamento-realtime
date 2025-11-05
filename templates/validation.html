@@ -3,663 +3,672 @@
 {% block title %}Validazione Posizionamento - Sensor Validator{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-8">
-        <h2 class="mb-4">Validazione Posizionamento con Overlay</h2>
+    <div class="row">
+        <div class="col-md-8">
+            <h2 class="mb-4">Validazione Posizionamento con Overlay</h2>
 
-        <div class="card">
-            <div class="card-body">
-                <div class="video-container position-relative mb-3">
-                    <!-- VIDEO WEBCAM -->
-                    <video id="videoElement" autoplay playsinline class="w-100 rounded"
-                        style="max-height: 500px;"></video>
+            <div class="card">
+                <div class="card-body">
+                    <div class="video-container position-relative mb-3">
+                        <!-- VIDEO WEBCAM -->
+                        <video id="videoElement" autoplay playsinline class="w-100 rounded"
+                               style="max-height: 500px;"></video>
 
-                    <!-- OVERLAY IMMAGINE DI RIFERIMENTO -->
-                    <canvas id="overlayCanvas" class="position-absolute top-0 start-0 w-100 h-100"
-                        style="pointer-events: none;"></canvas>
-                </div>
+                        <!-- OVERLAY IMMAGINE DI RIFERIMENTO -->
+                        <canvas id="overlayCanvas" class="position-absolute top-0 start-0 w-100 h-100"
+                                style="pointer-events: none;"></canvas>
+                    </div>
 
-                <!-- ACCURACY PANEL -->
-                <div class="accuracy-panel mb-3" id="accuracyPanel" style="display: none;">
-                    <div class="row align-items-center">
-                        <div class="col-md-4">
-                            <div class="accuracy-circle" id="accuracyCircle">
-                                <span class="accuracy-value" id="accuracyValue">0%</span>
+                    <!-- ACCURACY PANEL -->
+                    <div class="accuracy-panel mb-3" id="accuracyPanel" style="display: none;">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <div class="accuracy-circle" id="accuracyCircle">
+                                    <span class="accuracy-value" id="accuracyValue">0%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <h5 class="mb-2">Allineamento</h5>
+                                <p class="mb-1 fw-bold" id="accuracyMessage">In attesa...</p>
+                                <p class="mb-0 text-muted" id="directionHint"></p>
                             </div>
                         </div>
-                        <div class="col-md-8">
-                            <h5 class="mb-2">Allineamento</h5>
-                            <p class="mb-1 fw-bold" id="accuracyMessage">In attesa...</p>
-                            <p class="mb-0 text-muted" id="directionHint"></p>
+                    </div>
+
+                    <div class="controls mt-3">
+                        <button id="startBtn" class="btn btn-success">Avvia Validazione</button>
+                        <button id="stopBtn" class="btn btn-secondary" disabled>Ferma Validazione</button>
+                        <span id="statusMessage" class="ms-3"></span>
+                    </div>
+
+                    <!-- SLIDER TRASPARENZA -->
+                    <div class="card mt-3">
+                        <div class="card-body">
+                            <label for="opacitySlider" class="form-label">
+                                Opacità Riferimento: <span id="opacityValue">50</span>%
+                            </label>
+                            <input type="range" class="form-range" id="opacitySlider" min="0" max="100" step="5"
+                                   value="50">
+                            <small class="text-muted">Regola la trasparenza dell'immagine di riferimento</small>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="controls mt-3">
-                    <button id="startBtn" class="btn btn-success">Avvia Validazione</button>
-                    <button id="stopBtn" class="btn btn-secondary" disabled>Ferma Validazione</button>
-                    <span id="statusMessage" class="ms-3"></span>
+        <div class="col-md-4">
+            <h4 class="mb-3">Immagine di Riferimento</h4>
+
+            <div id="referencePreview" class="card mb-3">
+                <div class="card-body text-center">
+                    <p class="text-muted">Nessuna immagine di riferimento caricata</p>
+                    <a href="/upload" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Carica Riferimento
+                    </a>
                 </div>
+            </div>
 
-                <!-- SLIDER TRASPARENZA -->
-                <div class="card mt-3">
-                    <div class="card-body">
-                        <label for="opacitySlider" class="form-label">
-                            Opacità Riferimento: <span id="opacityValue">50</span>%
-                        </label>
-                        <input type="range" class="form-range" id="opacitySlider" min="0" max="100" step="5" value="50">
-                        <small class="text-muted">Regola la trasparenza dell'immagine di riferimento</small>
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Statistiche</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>Fotocamera:</strong>
+                        <span id="camStatus" class="badge bg-secondary">Non inizializzata</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Validazione:</strong>
+                        <span id="validationStatus" class="badge bg-secondary">Fermo</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Riferimento:</strong>
+                        <span id="referenceStatus" class="badge bg-secondary">Non caricato</span>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <div class="col-md-4">
-        <h4 class="mb-3">Immagine di Riferimento</h4>
+            <div class="card mt-4" id="metricsCard" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">Metriche Dettagliate</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>SSIM:</strong>
+                        <span id="ssimValue" class="badge bg-info">0%</span>
+                        <small class="text-muted d-block">Somiglianza strutturale</small>
+                    </div>
+                    <div class="mb-2">
+                        <strong>MSE:</strong>
+                        <span id="mseValue" class="badge bg-info">0%</span>
+                        <small class="text-muted d-block">Errore medio quadratico</small>
+                    </div>
+                    <div>
+                        <strong>Template Match:</strong>
+                        <span id="templateValue" class="badge bg-info">0%</span>
+                        <small class="text-muted d-block">Correlazione template</small>
+                    </div>
+                </div>
+            </div>
 
-        <div id="referencePreview" class="card mb-3">
-            <div class="card-body text-center">
-                <p class="text-muted">Nessuna immagine di riferimento caricata</p>
-                <a href="/upload" class="btn btn-primary">
-                    <i class="bi bi-upload"></i> Carica Riferimento
-                </a>
-            </div>
-        </div>
-
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="mb-0">Statistiche</h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-2">
-                    <strong>Fotocamera:</strong>
-                    <span id="camStatus" class="badge bg-secondary">Non inizializzata</span>
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Istruzioni</h5>
                 </div>
-                <div class="mb-2">
-                    <strong>Validazione:</strong>
-                    <span id="validationStatus" class="badge bg-secondary">Fermo</span>
+                <div class="card-body">
+                    <ol>
+                        <li>Carica un'immagine di riferimento con gli elettrodi posizionati correttamente</li>
+                        <li>Avvia la validazione per vedere l'overlay sul video</li>
+                        <li>Posiziona il tuo arto seguendo i suggerimenti di allineamento</li>
+                        <li>Raggiungi almeno 95% di accuratezza per un allineamento perfetto</li>
+                    </ol>
                 </div>
-                <div class="mb-2">
-                    <strong>Riferimento:</strong>
-                    <span id="referenceStatus" class="badge bg-secondary">Non caricato</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mt-4" id="metricsCard" style="display: none;">
-            <div class="card-header">
-                <h5 class="mb-0">Metriche Dettagliate</h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-2">
-                    <strong>SSIM:</strong>
-                    <span id="ssimValue" class="badge bg-info">0%</span>
-                    <small class="text-muted d-block">Somiglianza strutturale</small>
-                </div>
-                <div class="mb-2">
-                    <strong>MSE:</strong>
-                    <span id="mseValue" class="badge bg-info">0%</span>
-                    <small class="text-muted d-block">Errore medio quadratico</small>
-                </div>
-                <div>
-                    <strong>Template Match:</strong>
-                    <span id="templateValue" class="badge bg-info">0%</span>
-                    <small class="text-muted d-block">Correlazione template</small>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="mb-0">Istruzioni</h5>
-            </div>
-            <div class="card-body">
-                <ol>
-                    <li>Carica un'immagine di riferimento con gli elettrodi posizionati correttamente</li>
-                    <li>Avvia la validazione per vedere l'overlay sul video</li>
-                    <li>Posiziona il tuo arto seguendo i suggerimenti di allineamento</li>
-                    <li>Raggiungi almeno 95% di accuratezza per un allineamento perfetto</li>
-                </ol>
             </div>
         </div>
     </div>
-</div>
 
 {% endblock %}
 
 {% block scripts %}
-<script>
-    let referenceImage = null;
-    let referenceMetadata = null;
-    let overlayOpacity = 0.5;
-    let isValidating = false;
-    let animationFrameId = null;
-    let validationIntervalId = null;
+    <script>
+        let referenceImage = null;
+        let referenceMetadata = null;
+        let overlayOpacity = 0.5;
+        let isValidating = false;
+        let animationFrameId = null;
+        let validationIntervalId = null;
 
-    const video = document.getElementById('videoElement');
-    const canvas = document.getElementById('overlayCanvas');
-    const ctx = canvas ? canvas.getContext('2d') : null;
-    const opacitySlider = document.getElementById('opacitySlider');
-    const opacityValue = document.getElementById('opacityValue');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const videoContainer = document.querySelector('.video-container');
-    const accuracyPanel = document.getElementById('accuracyPanel');
-    const accuracyCircle = document.getElementById('accuracyCircle');
-    const accuracyValue = document.getElementById('accuracyValue');
-    const accuracyMessage = document.getElementById('accuracyMessage');
-    const directionHint = document.getElementById('directionHint');
-    const pointsCount = document.getElementById('pointsCount');
+        const video = document.getElementById('videoElement');
+        const canvas = document.getElementById('overlayCanvas');
+        const ctx = canvas ? canvas.getContext('2d') : null;
+        const opacitySlider = document.getElementById('opacitySlider');
+        const opacityValue = document.getElementById('opacityValue');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const videoContainer = document.querySelector('.video-container');
+        const accuracyPanel = document.getElementById('accuracyPanel');
+        const accuracyCircle = document.getElementById('accuracyCircle');
+        const accuracyValue = document.getElementById('accuracyValue');
+        const accuracyMessage = document.getElementById('accuracyMessage');
+        const directionHint = document.getElementById('directionHint');
+        const pointsCount = document.getElementById('pointsCount');
 
-    const MAX_VIDEO_HEIGHT = 500;
+        const MAX_VIDEO_HEIGHT = 500;
 
-    // Adatta il riquadro video al rapporto d'aspetto dell'immagine di riferimento
-    function adjustContainerToReference(imgWidth, imgHeight) {
-        if (!videoContainer || !video) return;
+        // Adatta il riquadro video al rapporto d'aspetto dell'immagine di riferimento
+        function adjustContainerToReference(imgWidth, imgHeight) {
+            if (!videoContainer || !video) return;
 
-        const aspect = imgHeight / imgWidth;
-        const parentWidth = videoContainer.parentElement.clientWidth;
+            const aspect = imgHeight / imgWidth;
+            const parentWidth = videoContainer.parentElement.clientWidth;
 
-        let desiredHeight = Math.round(parentWidth * aspect);
-        if (desiredHeight > MAX_VIDEO_HEIGHT) desiredHeight = MAX_VIDEO_HEIGHT;
+            let desiredHeight = Math.round(parentWidth * aspect);
+            if (desiredHeight > MAX_VIDEO_HEIGHT) desiredHeight = MAX_VIDEO_HEIGHT;
 
-        videoContainer.style.width = parentWidth + 'px';
-        videoContainer.style.height = desiredHeight + 'px';
+            videoContainer.style.width = parentWidth + 'px';
+            videoContainer.style.height = desiredHeight + 'px';
 
-        video.style.width = '100%';
-        video.style.height = '100%';
-        video.style.objectFit = 'contain';
+            video.style.width = '100%';
+            video.style.height = '100%';
+            video.style.objectFit = 'contain';
 
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-    }
-
-    function syncCanvasResolution() {
-        if (!canvas) return;
-        const cssWidth = Math.round(canvas.clientWidth);
-        const cssHeight = Math.round(canvas.clientHeight);
-        if (cssWidth > 0 && cssHeight > 0 && (canvas.width !== cssWidth || canvas.height !== cssHeight)) {
-            canvas.width = cssWidth;
-            canvas.height = cssHeight;
-        }
-    }
-
-    // Carica riferimento dal localStorage
-    function loadReferenceFromStorage() {
-        const storedReference = localStorage.getItem('referenceImage');
-        const storedMetadata = localStorage.getItem('referenceMetadata');
-
-        if (storedReference && storedMetadata) {
-            referenceImage = new Image();
-            referenceImage.src = storedReference;
-            referenceMetadata = JSON.parse(storedMetadata);
-
-            console.log('✅ Riferimento caricato dal localStorage');
-
-            const referencePreview = document.getElementById('referencePreview');
-            if (referencePreview) {
-                referencePreview.innerHTML = `
-                    <div class="card-body">
-                        <img src="${storedReference}" class="img-fluid rounded mb-2"
-                             style="max-height: 200px;">
-                        <p class="mb-1"><strong>Tipo:</strong> ${referenceMetadata.limbType}</p>
-                        <p class="mb-0"><small class="text-muted">
-                            Caricato: ${new Date(referenceMetadata.uploadDate).toLocaleString()}
-                        </small></p>
-                    </div>
-                `;
-            }
-
-            const referenceStatus = document.getElementById('referenceStatus');
-            if (referenceStatus) {
-                referenceStatus.textContent = 'Caricato';
-                referenceStatus.className = 'badge bg-success';
-            }
-
-            referenceImage.onload = () => {
-                adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
-                syncCanvasResolution();
-            };
-
-            if (referenceImage.complete && referenceImage.naturalWidth && referenceImage.naturalHeight) {
-                adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
-                syncCanvasResolution();
-            }
-
-            if (startBtn) startBtn.disabled = false;
-            showStatus('Riferimento caricato! Pronto per la validazione.', 'success');
-            return true;
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
         }
 
-        console.log('❌ Nessun riferimento trovato');
-        showStatus('Carica un\'immagine di riferimento per iniziare', 'warning');
-        return false;
-    }
-
-    // Slider opacità
-    if (opacitySlider && opacityValue) {
-        opacitySlider.addEventListener('input', function () {
-            overlayOpacity = this.value / 100;
-            opacityValue.textContent = this.value;
-        });
-    }
-
-    // Cattura frame dalla webcam
-    function captureFrame() {
-        if (!video || !canvas) return null;
-
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = video.videoWidth;
-        tempCanvas.height = video.videoHeight;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(video, 0, 0);
-        return tempCanvas.toDataURL('image/jpeg', 0.8);
-    }
-
-    // Invia frame al server per validazione
-    async function validateFrame() {
-        if (!isValidating || !referenceImage) return;
-
-        try {
-            const currentFrame = captureFrame();
-            if (!currentFrame) return;
-
-            const response = await fetch('/api/validate_frame', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    reference_image: referenceImage.src,
-                    current_frame: currentFrame,
-                    reference_metadata: JSON.stringify(referenceMetadata)
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                updateAccuracyDisplay(result);
-            } else {
-                console.error('Validation error:', result.error);
-            }
-        } catch (error) {
-            console.error('Error validating frame:', error);
-        }
-    }
-
-    // Aggiorna display accuratezza
-    function updateAccuracyDisplay(result) {
-        const accuracy = result.accuracy || 0;
-        const message = result.message || 'In elaborazione...';
-        const direction = result.direction;
-        const points = result.points_detected || 0;
-
-        // Mostra il pannello
-        if (accuracyPanel) {
-            accuracyPanel.style.display = 'block';
-        }
-
-        // Aggiorna valore accuratezza
-        if (accuracyValue) {
-            accuracyValue.textContent = `${Math.round(accuracy)}%`;
-        }
-
-        // Aggiorna colore cerchio in base all'accuratezza
-        if (accuracyCircle) {
-            accuracyCircle.className = 'accuracy-circle';
-            if (accuracy >= 95) {
-                accuracyCircle.classList.add('excellent');
-            } else if (accuracy >= 85) {
-                accuracyCircle.classList.add('good');
-            } else if (accuracy >= 70) {
-                accuracyCircle.classList.add('fair');
-            } else {
-                accuracyCircle.classList.add('poor');
+        function syncCanvasResolution() {
+            if (!canvas) return;
+            const cssWidth = Math.round(canvas.clientWidth);
+            const cssHeight = Math.round(canvas.clientHeight);
+            if (cssWidth > 0 && cssHeight > 0 && (canvas.width !== cssWidth || canvas.height !== cssHeight)) {
+                canvas.width = cssWidth;
+                canvas.height = cssHeight;
             }
         }
 
-        // Aggiorna messaggio
-        if (accuracyMessage) {
-            accuracyMessage.textContent = message;
+        // Carica riferimento dal localStorage
+        function loadReferenceFromStorage() {
+            const storedReference = localStorage.getItem('referenceImage');
+            const storedMetadata = localStorage.getItem('referenceMetadata');
+
+            if (storedReference && storedMetadata) {
+                referenceImage = new Image();
+                referenceImage.src = storedReference; // ⭐ Questa sarà l'immagine annotata se disponibile
+                referenceMetadata = JSON.parse(storedMetadata);
+
+                console.log('✅ Riferimento caricato dal localStorage');
+                console.log('📊 Metadata:', referenceMetadata);
+
+                // ⭐ AGGIUNGI QUESTO LOG per verificare se ha annotazioni
+                if (referenceMetadata.hasAnnotations) {
+                    console.log('💉 Immagine CON landmark e sensori caricata!');
+                } else {
+                    console.log('📷 Immagine senza annotazioni caricata');
+                }
+
+                const referencePreview = document.getElementById('referencePreview');
+                if (referencePreview) {
+                    // ⭐ AGGIUNGI badge per mostrare se ha annotazioni
+                    const annotationBadge = referenceMetadata.hasAnnotations
+                        ? '<span class="badge bg-success ms-2"><i class="bi bi-geo-alt-fill"></i> Con Landmark</span>'
+                        : '';
+
+                    referencePreview.innerHTML = `
+                <div class="card-body">
+                    <img src="${storedReference}" class="img-fluid rounded mb-2"
+                         style="max-height: 200px;">
+                    <p class="mb-1">
+                        <strong>Tipo:</strong> ${referenceMetadata.limbType}
+                        ${annotationBadge}
+                    </p>
+                    <p class="mb-0"><small class="text-muted">
+                        Caricato: ${new Date(referenceMetadata.uploadDate).toLocaleString()}
+                    </small></p>
+                </div>
+            `;
+                }
+
+                const referenceStatus = document.getElementById('referenceStatus');
+                if (referenceStatus) {
+                    referenceStatus.textContent = 'Caricato';
+                    referenceStatus.className = 'badge bg-success';
+                }
+
+                referenceImage.onload = () => {
+                    adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+                    syncCanvasResolution();
+                };
+
+                if (referenceImage.complete && referenceImage.naturalWidth && referenceImage.naturalHeight) {
+                    adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+                    syncCanvasResolution();
+                }
+
+                if (startBtn) startBtn.disabled = false;
+                showStatus('Riferimento caricato! Pronto per la validazione.', 'success');
+                return true;
+            }
+
+            console.log('❌ Nessun riferimento trovato');
+            showStatus('Carica un\'immagine di riferimento per iniziare', 'warning');
+            return false;
         }
 
-        // Aggiorna suggerimenti direzione
-        if (directionHint) {
-            if (direction) {
-                directionHint.innerHTML = `<i class="bi bi-arrow-right"></i> Sposta: <strong>${direction}</strong>`;
-                directionHint.style.display = 'block';
-            } else {
-                directionHint.style.display = 'none';
+        // Cattura frame dalla webcam
+        function captureFrame() {
+            if (!video || !canvas) return null;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(video, 0, 0);
+            return tempCanvas.toDataURL('image/jpeg', 0.8);
+        }
+
+        // Invia frame al server per validazione
+        async function validateFrame() {
+            if (!isValidating || !referenceImage) return;
+
+            try {
+                const currentFrame = captureFrame();
+                if (!currentFrame) return;
+
+                const response = await fetch('/api/validate_frame', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        reference_image: referenceImage.src,
+                        current_frame: currentFrame,
+                        reference_metadata: JSON.stringify(referenceMetadata)
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    updateAccuracyDisplay(result);
+                } else {
+                    console.error('Validation error:', result.error);
+                }
+            } catch (error) {
+                console.error('Error validating frame:', error);
             }
         }
 
-        // Aggiorna conteggio punti
-        if (pointsCount) {
-            pointsCount.textContent = points;
+        // Aggiorna display accuratezza
+        function updateAccuracyDisplay(result) {
+            const accuracy = result.accuracy || 0;
+            const message = result.message || 'In elaborazione...';
+            const direction = result.direction;
+            const points = result.points_detected || 0;
+
+            // Mostra il pannello
+            if (accuracyPanel) {
+                accuracyPanel.style.display = 'block';
+            }
+
+            // Aggiorna valore accuratezza
+            if (accuracyValue) {
+                accuracyValue.textContent = `${Math.round(accuracy)}%`;
+            }
+
+            // Aggiorna colore cerchio in base all'accuratezza
+            if (accuracyCircle) {
+                accuracyCircle.className = 'accuracy-circle';
+                if (accuracy >= 95) {
+                    accuracyCircle.classList.add('excellent');
+                } else if (accuracy >= 85) {
+                    accuracyCircle.classList.add('good');
+                } else if (accuracy >= 70) {
+                    accuracyCircle.classList.add('fair');
+                } else {
+                    accuracyCircle.classList.add('poor');
+                }
+            }
+
+            // Aggiorna messaggio
+            if (accuracyMessage) {
+                accuracyMessage.textContent = message;
+            }
+
+            // Aggiorna suggerimenti direzione
+            if (directionHint) {
+                if (direction) {
+                    directionHint.innerHTML = `<i class="bi bi-arrow-right"></i> Sposta: <strong>${direction}</strong>`;
+                    directionHint.style.display = 'block';
+                } else {
+                    directionHint.style.display = 'none';
+                }
+            }
+
+            // Aggiorna conteggio punti
+            if (pointsCount) {
+                pointsCount.textContent = points;
+            }
         }
-    }
 
-    // Avvia validazione con overlay
-    async function startValidation() {
-        if (isValidating) return;
+        // Avvia validazione con overlay
+        async function startValidation() {
+            if (isValidating) return;
 
-        if (!referenceImage) {
-            showStatus('Carica prima un\'immagine di riferimento!', 'error');
-            return;
-        }
-
-        console.log('Avvio validazione con overlay...');
-
-        // Inizializza camera
-        if (!window.sensorApp || !window.sensorApp.stream) {
-            const success = await window.sensorApp.initializeCameraWithAdaptiveResolution(
-                null,
-                referenceImage
-            );
-            if (!success) {
-                showStatus('Errore nell\'accesso alla fotocamera', 'error');
+            if (!referenceImage) {
+                showStatus('Carica prima un\'immagine di riferimento!', 'error');
                 return;
             }
+
+            console.log('Avvio validazione con overlay...');
+
+            // Inizializza camera
+            if (!window.sensorApp || !window.sensorApp.stream) {
+                const success = await window.sensorApp.initializeCameraWithAdaptiveResolution(
+                    null,
+                    referenceImage
+                );
+                if (!success) {
+                    showStatus('Errore nell\'accesso alla fotocamera', 'error');
+                    return;
+                }
+            }
+
+            if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
+                adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+            }
+
+            isValidating = true;
+            if (startBtn) startBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = false;
+
+            const validationStatus = document.getElementById('validationStatus');
+            if (validationStatus) {
+                validationStatus.textContent = 'Attivo';
+                validationStatus.className = 'badge bg-success';
+            }
+
+            showStatus('Validazione attiva - Allinea il tuo arto con l\'overlay', 'info');
+
+            // Avvia rendering overlay
+            renderOverlay();
+
+            // Avvia validazione periodica (ogni 500ms per non sovraccaricare)
+            validationIntervalId = setInterval(validateFrame, 500);
         }
 
-        if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
-            adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+        // Loop di rendering overlay
+        function renderOverlay() {
+            if (!isValidating) {
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+                return;
+            }
+
+            if (!video || !canvas || !ctx || !referenceImage) {
+                animationFrameId = requestAnimationFrame(renderOverlay);
+                return;
+            }
+
+            syncCanvasResolution();
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.globalAlpha = overlayOpacity;
+
+            const imgW = referenceImage.naturalWidth;
+            const imgH = referenceImage.naturalHeight;
+            const cw = canvas.width;
+            const ch = canvas.height;
+
+            if (imgW > 0 && imgH > 0) {
+                const imgAspect = imgW / imgH;
+                const canvasAspect = cw / ch;
+                let drawW, drawH, offsetX, offsetY;
+
+                if (canvasAspect > imgAspect) {
+                    drawH = ch;
+                    drawW = Math.round(drawH * imgAspect);
+                } else {
+                    drawW = cw;
+                    drawH = Math.round(drawW / imgAspect);
+                }
+
+                offsetX = Math.round((cw - drawW) / 2);
+                offsetY = Math.round((ch - drawH) / 2);
+
+                ctx.drawImage(referenceImage, offsetX, offsetY, drawW, drawH);
+            }
+
+            ctx.globalAlpha = 1.0;
+
+            // Aggiungi testo informativo
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(10, 10, 250, 50);
+            ctx.fillStyle = '#00ff00';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText('Allinea il tuo arto', 20, 35);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '14px Arial';
+            ctx.fillText(`Opacità: ${Math.round(overlayOpacity * 100)}%`, 20, 55);
+
+            animationFrameId = requestAnimationFrame(renderOverlay);
         }
 
-        isValidating = true;
-        if (startBtn) startBtn.disabled = true;
-        if (stopBtn) stopBtn.disabled = false;
+        // Ferma validazione
+        function stopValidation() {
+            console.log('Arresto validazione...');
+            isValidating = false;
 
-        const validationStatus = document.getElementById('validationStatus');
-        if (validationStatus) {
-            validationStatus.textContent = 'Attivo';
-            validationStatus.className = 'badge bg-success';
-        }
-
-        showStatus('Validazione attiva - Allinea il tuo arto con l\'overlay', 'info');
-
-        // Avvia rendering overlay
-        renderOverlay();
-
-        // Avvia validazione periodica (ogni 500ms per non sovraccaricare)
-        validationIntervalId = setInterval(validateFrame, 500);
-    }
-
-    // Loop di rendering overlay
-    function renderOverlay() {
-        if (!isValidating) {
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
-            return;
-        }
 
-        if (!video || !canvas || !ctx || !referenceImage) {
-            animationFrameId = requestAnimationFrame(renderOverlay);
-            return;
-        }
-
-        syncCanvasResolution();
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        ctx.globalAlpha = overlayOpacity;
-
-        const imgW = referenceImage.naturalWidth;
-        const imgH = referenceImage.naturalHeight;
-        const cw = canvas.width;
-        const ch = canvas.height;
-
-        if (imgW > 0 && imgH > 0) {
-            const imgAspect = imgW / imgH;
-            const canvasAspect = cw / ch;
-            let drawW, drawH, offsetX, offsetY;
-
-            if (canvasAspect > imgAspect) {
-                drawH = ch;
-                drawW = Math.round(drawH * imgAspect);
-            } else {
-                drawW = cw;
-                drawH = Math.round(drawW / imgAspect);
+            if (validationIntervalId) {
+                clearInterval(validationIntervalId);
+                validationIntervalId = null;
             }
 
-            offsetX = Math.round((cw - drawW) / 2);
-            offsetY = Math.round((ch - drawH) / 2);
+            if (ctx && canvas) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
 
-            ctx.drawImage(referenceImage, offsetX, offsetY, drawW, drawH);
+            if (accuracyPanel) {
+                accuracyPanel.style.display = 'none';
+            }
+
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.disabled = true;
+
+            const validationStatus = document.getElementById('validationStatus');
+            if (validationStatus) {
+                validationStatus.textContent = 'Fermo';
+                validationStatus.className = 'badge bg-secondary';
+            }
+
+            showStatus('Validazione fermata', 'info');
         }
 
-        ctx.globalAlpha = 1.0;
-
-        // Aggiungi testo informativo
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(10, 10, 250, 50);
-        ctx.fillStyle = '#00ff00';
-        ctx.font = 'bold 16px Arial';
-        ctx.fillText('Allinea il tuo arto', 20, 35);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '14px Arial';
-        ctx.fillText(`Opacità: ${Math.round(overlayOpacity * 100)}%`, 20, 55);
-
-        animationFrameId = requestAnimationFrame(renderOverlay);
-    }
-
-    // Ferma validazione
-    function stopValidation() {
-        console.log('Arresto validazione...');
-        isValidating = false;
-
-        if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-            animationFrameId = null;
+        // Event listeners
+        if (startBtn) {
+            startBtn.addEventListener('click', startValidation);
         }
 
-        if (validationIntervalId) {
-            clearInterval(validationIntervalId);
-            validationIntervalId = null;
+        if (stopBtn) {
+            stopBtn.addEventListener('click', stopValidation);
         }
 
-        if (ctx && canvas) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(async () => {
+                if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
+                    adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
+                    syncCanvasResolution();
 
-        if (accuracyPanel) {
-            accuracyPanel.style.display = 'none';
-        }
-
-        if (startBtn) startBtn.disabled = false;
-        if (stopBtn) stopBtn.disabled = true;
-
-        const validationStatus = document.getElementById('validationStatus');
-        if (validationStatus) {
-            validationStatus.textContent = 'Fermo';
-            validationStatus.className = 'badge bg-secondary';
-        }
-
-        showStatus('Validazione fermata', 'info');
-    }
-
-    // Event listeners
-    if (startBtn) {
-        startBtn.addEventListener('click', startValidation);
-    }
-
-    if (stopBtn) {
-        stopBtn.addEventListener('click', stopValidation);
-    }
-
-    let resizeTimeout;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(async () => {
-            if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
-                adjustContainerToReference(referenceImage.naturalWidth, referenceImage.naturalHeight);
-                syncCanvasResolution();
-
-                if (window.sensorApp && window.sensorApp.stream && !isValidating) {
-                    console.log('Aggiornamento risoluzione camera dopo resize...');
-                    await window.sensorApp.updateCameraResolution(referenceImage);
+                    if (window.sensorApp && window.sensorApp.stream && !isValidating) {
+                        console.log('Aggiornamento risoluzione camera dopo resize...');
+                        await window.sensorApp.updateCameraResolution(referenceImage);
+                    }
+                } else {
+                    if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
+                    syncCanvasResolution();
                 }
+            }, 500);
+        });
+
+        // Funzione helper per mostrare messaggi
+        function showStatus(message, type = 'info') {
+            const statusElement = document.getElementById('statusMessage');
+            if (statusElement) {
+                statusElement.textContent = message;
+                statusElement.className = `ms-3 text-${type}`;
+                setTimeout(() => {
+                    if (!isValidating) {
+                        statusElement.textContent = '';
+                        statusElement.className = 'ms-3';
+                    }
+                }, 3000);
+            }
+        }
+
+        // Inizializzazione
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('🚀 Inizializzazione pagina validazione overlay...');
+
+            const hasReference = loadReferenceFromStorage();
+
+            if (!hasReference && startBtn) {
+                startBtn.disabled = true;
             } else {
                 if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
                 syncCanvasResolution();
             }
-        }, 500);
-    });
+        });
+    </script>
 
-    // Funzione helper per mostrare messaggi
-    function showStatus(message, type = 'info') {
-        const statusElement = document.getElementById('statusMessage');
-        if (statusElement) {
-            statusElement.textContent = message;
-            statusElement.className = `ms-3 text-${type}`;
-            setTimeout(() => {
-                if (!isValidating) {
-                    statusElement.textContent = '';
-                    statusElement.className = 'ms-3';
-                }
-            }, 3000);
-        }
-    }
+    <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 
-    // Inizializzazione
-    document.addEventListener('DOMContentLoaded', function () {
-        console.log('🚀 Inizializzazione pagina validazione overlay...');
-
-        const hasReference = loadReferenceFromStorage();
-
-        if (!hasReference && startBtn) {
-            startBtn.disabled = true;
-        } else {
-            if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
-            syncCanvasResolution();
-        }
-    });
-</script>
-
-<script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
-
-<style>
-    .video-container {
-        position: relative;
-        display: inline-block;
-        width: 100%;
-        background: #000;
-        border-radius: 8px;
-        overflow: hidden;
-        height: 500px;
-    }
-
-    #overlayCanvas {
-        position: absolute;
-        top: 0;
-        left: 0;
-        pointer-events: none;
-        width: 100%;
-        height: 100%;
-    }
-
-    #videoElement {
-        display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-    }
-
-    .controls {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-        padding: 15px;
-        background: #f8f9fa;
-        border-radius: 8px;
-        border: 1px solid #dee2e6;
-    }
-
-    .accuracy-panel {
-        padding: 20px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 12px;
-        color: white;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .accuracy-circle {
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto;
-        font-size: 28px;
-        font-weight: bold;
-        border: 8px solid rgba(255, 255, 255, 0.3);
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        transition: all 0.3s ease;
-    }
-
-    .accuracy-circle.excellent {
-        border-color: #00ff00;
-        background: rgba(0, 255, 0, 0.2);
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-    }
-
-    .accuracy-circle.good {
-        border-color: #90ee90;
-        background: rgba(144, 238, 144, 0.2);
-        box-shadow: 0 0 20px rgba(144, 238, 144, 0.4);
-    }
-
-    .accuracy-circle.fair {
-        border-color: #ffa500;
-        background: rgba(255, 165, 0, 0.2);
-        box-shadow: 0 0 20px rgba(255, 165, 0, 0.4);
-    }
-
-    .accuracy-circle.poor {
-        border-color: #ff6b6b;
-        background: rgba(255, 107, 107, 0.2);
-        box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
-    }
-
-    .accuracy-value {
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-    }
-
-    #accuracyMessage {
-        font-size: 1.2em;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-    }
-
-    #directionHint {
-        font-size: 1.1em;
-        background: rgba(255, 255, 255, 0.2);
-        padding: 8px 12px;
-        border-radius: 6px;
-        display: inline-block;
-    }
-
-    @media (max-width: 768px) {
-        .controls {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .controls .btn {
+    <style>
+        .video-container {
+            position: relative;
+            display: inline-block;
             width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 500px;
+        }
+
+        #overlayCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        #videoElement {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .accuracy-panel {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
 
         .accuracy-circle {
-            width: 100px;
-            height: 100px;
-            font-size: 24px;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            font-size: 28px;
+            font-weight: bold;
+            border: 8px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
         }
-    }
-</style>
+
+        .accuracy-circle.excellent {
+            border-color: #00ff00;
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+
+        .accuracy-circle.good {
+            border-color: #90ee90;
+            background: rgba(144, 238, 144, 0.2);
+            box-shadow: 0 0 20px rgba(144, 238, 144, 0.4);
+        }
+
+        .accuracy-circle.fair {
+            border-color: #ffa500;
+            background: rgba(255, 165, 0, 0.2);
+            box-shadow: 0 0 20px rgba(255, 165, 0, 0.4);
+        }
+
+        .accuracy-circle.poor {
+            border-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.2);
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
+        }
+
+        .accuracy-value {
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        #accuracyMessage {
+            font-size: 1.2em;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        #directionHint {
+            font-size: 1.1em;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .controls .btn {
+                width: 100%;
+            }
+
+            .accuracy-circle {
+                width: 100px;
+                height: 100px;
+                font-size: 24px;
+            }
+        }
+    </style>
 {% endblock %}

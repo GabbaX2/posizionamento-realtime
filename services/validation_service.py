@@ -203,6 +203,7 @@ class ValidationService:
                                  sensor_positions: Dict = None) -> np.ndarray:
         """
         Disegna i landmark e le posizioni dei sensori sull'immagine
+        SENZA ETICHETTE TESTUALI - solo cerchi colorati
 
         Args:
             image: immagine da annotare
@@ -211,8 +212,9 @@ class ValidationService:
         """
         result = image.copy()
         h, w = image.shape[:2]
+        print(f"[DRAW] Dimensioni immagine: {w}x{h}")
 
-        # 1. DISEGNA I LANDMARK ANATOMICI
+        # 1. DISEGNA I LANDMARK ANATOMICI (piccoli cerchi colorati)
         print(f"[DRAW] Disegno {len(landmarks)} landmark anatomici...")
         for name, info in landmarks.items():
             xy = info.get('xy')
@@ -228,138 +230,78 @@ class ValidationService:
             # Colore basato sulla confidenza
             if score >= 0.75:
                 color = (0, 255, 0)  # Verde - alta confidenza
-                label_color = "HIGH"
             elif score >= 0.4:
                 color = (0, 255, 255)  # Giallo - media confidenza
-                label_color = "MED"
             else:
                 color = (0, 0, 255)  # Rosso - bassa confidenza
-                label_color = "LOW"
 
-            # Disegna cerchio per il landmark
-            cv2.circle(result, (x, y), 8, color, -1)  # Cerchio pieno
-            cv2.circle(result, (x, y), 10, (255, 255, 255), 2)  # Bordo bianco
+            # Disegna solo cerchio piccolo per il landmark (NO TESTO)
+            cv2.circle(result, (x, y), 6, color, -1)  # Cerchio pieno
+            cv2.circle(result, (x, y), 8, (255, 255, 255), 2)  # Bordo bianco
 
-            # Prepara etichetta
-            label = f"{name}"
-            label_score = f"{score:.2f}"
-
-            # Background per il testo
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 0.5
-            thickness = 2
-            (text_width, text_height), baseline = cv2.getTextSize(
-                label, font, font_scale, thickness
-            )
-
-            # Posizione testo (sopra il punto)
-            text_x = x + 12
-            text_y = y - 10
-
-            # Rettangolo background
-            cv2.rectangle(
-                result,
-                (text_x - 2, text_y - text_height - 2),
-                (text_x + text_width + 2, text_y + baseline + 2),
-                (0, 0, 0),
-                -1
-            )
-
-            # Testo landmark name
-            cv2.putText(
-                result, label, (text_x, text_y),
-                font, font_scale, color, thickness
-            )
-
-            # Score sotto il nome
-            cv2.putText(
-                result, label_score, (text_x, text_y + 15),
-                font, 0.4, (255, 255, 255), 1
-            )
-
-        # 2. DISEGNA LE POSIZIONI DEI SENSORI
+        # 2. DISEGNA LE POSIZIONI DEI SENSORI (cerchi grandi distintivi)
         if sensor_positions:
             print(f"[DRAW] Disegno {len(sensor_positions)} posizioni sensori...")
+            print(f"[DRAW] Sensori ricevuti: {list(sensor_positions.keys())}")
 
-            # Colori diversi per muscoli diversi
+            # Colori distintivi per ogni muscolo (BGR format) - PIÙ VISIBILI
             sensor_colors = {
-                'vasto_mediale': (255, 0, 0),  # Blu
-                'retto_femorale': (255, 0, 255),  # Magenta
-                'gastrocnemio': (0, 165, 255),  # Arancione
-                'tibiale_anteriore': (0, 255, 0)  # Verde
+                'vasto_mediale': (255, 100, 100),  # BLU CHIARO (più visibile)
+                'retto_femorale': (255, 0, 255),  # MAGENTA
+                'gastrocnemio': (0, 165, 255),  # ARANCIONE
+                'tibiale_anteriore': (100, 255, 100)  # VERDE CHIARO
             }
 
             for muscle_name, sensor_info in sensor_positions.items():
+                print(f"[DRAW] Processando sensore '{muscle_name}'...")
+                print(f"[DRAW] Dati sensore: {sensor_info}")
+
                 position = sensor_info.get('position')
                 confidence = sensor_info.get('confidence', 0.0)
 
                 if position is None:
-                    print(f"   ⚠️ Sensore '{muscle_name}' non ha posizione valida")
+                    print(f"   ❌ Sensore '{muscle_name}' ha position=None")
                     continue
 
-                x, y = position
+                # Verifica che position sia una tupla/lista con 2 elementi
+                if not isinstance(position, (tuple, list)) or len(position) != 2:
+                    print(f"   ❌ Sensore '{muscle_name}' ha formato posizione non valido: {position}")
+                    continue
+
+                x, y = int(position[0]), int(position[1])
+
+                # Verifica che le coordinate siano dentro l'immagine
+                if x < 0 or x >= w or y < 0 or y >= h:
+                    print(f"   ⚠️ Sensore '{muscle_name}' FUORI dai bordi: ({x}, {y}) - Immagine: {w}x{h}")
+                    # Clamp alle coordinate valide
+                    x = max(0, min(x, w - 1))
+                    y = max(0, min(y, h - 1))
+                    print(f"   📍 Coordinate clamped a: ({x}, {y})")
+
                 color = sensor_colors.get(muscle_name, (128, 128, 128))
 
-                print(f"   ✓ Disegno sensore '{muscle_name}' a ({x}, {y}) con confidenza {confidence:.2f}")
+                print(f"   ✅ Disegno sensore '{muscle_name}' a ({x}, {y}) colore BGR{color}")
 
-                # Disegna cerchio grande per il sensore
-                cv2.circle(result, (x, y), 15, color, -1)  # Cerchio pieno colorato
-                cv2.circle(result, (x, y), 18, (255, 255, 255), 3)  # Bordo bianco spesso
-                cv2.circle(result, (x, y), 21, (0, 0, 0), 2)  # Bordo nero esterno
+                # Disegna cerchi concentrici per il sensore (NO TESTO)
+                try:
+                    # Cerchio esterno nero (più grande per visibilità)
+                    cv2.circle(result, (x, y), 30, (0, 0, 0), 4)
 
-                # Croce centrale per precisione
-                cross_size = 8
-                cv2.line(result, (x - cross_size, y), (x + cross_size, y), (255, 255, 255), 2)
-                cv2.line(result, (x, y - cross_size), (x, y + cross_size), (255, 255, 255), 2)
+                    # Cerchio medio bianco
+                    cv2.circle(result, (x, y), 25, (255, 255, 255), 4)
 
-                # Etichetta sensore
-                label = f"SENSORE: {muscle_name}"
-                conf_label = f"Conf: {confidence:.2f}"
+                    # Cerchio interno colorato (identificativo del muscolo)
+                    cv2.circle(result, (x, y), 18, color, -1)
 
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.6
-                thickness = 2
+                    # Punto centrale bianco per precisione
+                    cv2.circle(result, (x, y), 4, (255, 255, 255), -1)
 
-                # Calcola dimensioni testo
-                (text_width, text_height), baseline = cv2.getTextSize(
-                    label, font, font_scale, thickness
-                )
+                    print(f"   ✓ Cerchi disegnati con successo per '{muscle_name}'")
 
-                # Posizione testo (a destra del sensore)
-                text_x = x + 25
-                text_y = y
+                except Exception as e:
+                    print(f"   ❌ Errore nel disegnare cerchi per '{muscle_name}': {e}")
 
-                # Background nero per leggibilità
-                cv2.rectangle(
-                    result,
-                    (text_x - 3, text_y - text_height - 3),
-                    (text_x + text_width + 3, text_y + 20),
-                    (0, 0, 0),
-                    -1
-                )
-
-                # Bordo colorato
-                cv2.rectangle(
-                    result,
-                    (text_x - 3, text_y - text_height - 3),
-                    (text_x + text_width + 3, text_y + 20),
-                    color,
-                    2
-                )
-
-                # Testo nome muscolo (bianco)
-                cv2.putText(
-                    result, label, (text_x, text_y),
-                    font, font_scale, (255, 255, 255), thickness
-                )
-
-                # Testo confidenza (colore del sensore)
-                cv2.putText(
-                    result, conf_label, (text_x, text_y + 15),
-                    font, 0.45, color, 1
-                )
-
-                # Linea che collega i landmark usati al sensore
+                # Linea tratteggiata che collega i landmark usati al sensore
                 if 'landmarks_used' in sensor_info:
                     landmarks_used = sensor_info['landmarks_used']
                     if len(landmarks_used) >= 2:
@@ -370,10 +312,11 @@ class ValidationService:
                         lm_end = landmarks.get(lm_end_name, {}).get('xy')
 
                         if lm_start and lm_end:
-                            # Linea tratteggiata tra i landmark
+                            print(f"   → Disegno linea da {lm_start_name} a {lm_end_name}")
+                            # Linea tratteggiata sottile tra i landmark
                             self._draw_dashed_line(result, lm_start, lm_end, color, 2)
 
-        print(f"[DRAW] ✅ Annotazione completata")
+        print(f"[DRAW] ✅ Annotazione completata (senza etichette)")
         return result
 
     def _draw_dashed_line(self, image: np.ndarray, pt1: Tuple[int, int],
