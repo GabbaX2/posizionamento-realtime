@@ -83,75 +83,33 @@ def validation_page():
 @app.route('/api/upload_reference', methods=['POST'])
 def api_upload_reference():
     """
-    Endpoint per caricare un'immagine di riferimento SENZA elaborazione
-    Salva solo l'immagine originale
+    Endpoint per caricare un'immagine di riferimento CON elaborazione landmark
+    Usa ValidationService.handle_reference_upload che include:
+    - Salvataggio immagine
+    - Detection landmark (se limb_type='leg')
+    - Annotazione immagine
     """
     try:
-        logger.info("[ROUTE] /api/upload_reference called - SIMPLE UPLOAD (no detection)")
+        logger.info("[ROUTE] /api/upload_reference called - WITH LANDMARK DETECTION")
 
-        # Verifica presenza file
-        if 'file' not in request.files:
-            return jsonify({
-                'success': False,
-                'error': 'Nessun file fornito'
-            }), 400
+        # Usa il metodo del ValidationService che abbiamo modificato
+        result = validation_service.handle_reference_upload(request)
 
-        file = request.files['file']
-        limb_type = request.form.get('limb_type', 'arm')
+        if result.get('success'):
+            logger.info("✅ Upload e processing completato con successo")
 
-        if file.filename == '':
-            return jsonify({
-                'success': False,
-                'error': 'Nessun file selezionato'
-            }), 400
+            # Log landmark info se presenti
+            if 'landmarks' in result:
+                landmarks_info = result['landmarks']
+                logger.info(f"   📍 Landmark rilevati: {landmarks_info.get('total_landmarks', 0)}")
+                logger.info(f"   🔬 Metodo: {landmarks_info.get('detection_method', 'N/A')}")
 
-        # Leggi l'immagine
-        file_bytes = np.frombuffer(file.read(), np.uint8)
-        image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+                if 'sensor_positions' in landmarks_info:
+                    logger.info(f"   💉 Posizioni sensori calcolate: {len(landmarks_info['sensor_positions'])}")
+        else:
+            logger.warning(f"⚠️ Upload fallito: {result.get('error', 'Unknown error')}")
 
-        if image is None:
-            return jsonify({
-                'success': False,
-                'error': 'Impossibile decodificare l\'immagine'
-            }), 400
-
-        # Converti in base64 per il frontend
-        _, buffer = cv2.imencode('.jpg', image)
-        image_base64 = base64.b64encode(buffer).decode('utf-8')
-
-        # Salva il file
-        session_id = request.form.get('session_id', 'default')
-        upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
-        os.makedirs(upload_folder, exist_ok=True)
-
-        # Salva immagine originale
-        image_path = os.path.join(upload_folder, f"{session_id}_reference.jpg")
-        cv2.imwrite(image_path, image)
-
-        # Salva metadata JSON
-        metadata = {
-            'limb_type': limb_type,
-            'filename': file.filename,
-            'upload_date': str(np.datetime64('now')),
-            'image_path': image_path,
-            'preview_image': image_base64
-        }
-
-        metadata_path = os.path.join(upload_folder, f"{session_id}_reference.json")
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f)
-
-        logger.info(f"✅ Immagine salvata: {file.filename}, Tipo: {limb_type}")
-        logger.info(f"   Path: {image_path}")
-
-        return jsonify({
-            'success': True,
-            'message': 'Immagine caricata con successo (senza elaborazione)',
-            'preview_image': image_base64,
-            'limb_type': limb_type,
-            'filename': file.filename,
-            'session_id': session_id
-        })
+        return jsonify(result)
 
     except Exception as e:
         logger.error(f"[ERROR] Route /api/upload_reference failed: {e}")

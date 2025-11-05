@@ -3,752 +3,878 @@
 {% block title %}Carica Riferimento - Sensor Placement Validator{% endblock %}
 
 {% block content %}
-<div class="upload-section">
-    <div class="row justify-content-center">
-        <div class="col-12 col-lg-10">
-            <!-- Header Section -->
-            <div class="text-center mb-4 mb-md-5">
-                <div class="upload-icon bg-primary rounded-circle mx-auto mb-3">
-                    <i class="bi bi-cloud-upload fs-1 text-white"></i>
+    <div class="upload-section">
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-10">
+                <!-- Header Section -->
+                <div class="text-center mb-4 mb-md-5">
+                    <div class="upload-icon bg-primary rounded-circle mx-auto mb-3">
+                        <i class="bi bi-cloud-upload fs-1 text-white"></i>
+                    </div>
+                    <h1 class="display-6 display-md-5 fw-bold text-dark mb-2 mb-md-3">Carica Immagine di
+                        Riferimento</h1>
+                    <p class="lead text-muted d-none d-md-block">Carica un'immagine con i sensori posizionati
+                        correttamente
+                    </p>
+                    <p class="text-muted d-md-none">Carica l'immagine di riferimento</p>
                 </div>
-                <h1 class="display-6 display-md-5 fw-bold text-dark mb-2 mb-md-3">Carica Immagine di Riferimento</h1>
-                <p class="lead text-muted d-none d-md-block">Carica un'immagine con i sensori posizionati correttamente
-                </p>
-                <p class="text-muted d-md-none">Carica l'immagine di riferimento</p>
-            </div>
 
-            <!-- Upload Card -->
-            <div class="card border-0 shadow-lg mb-4">
-                <div class="card-header bg-gradient-primary text-white py-3">
-                    <h4 class="mb-0 fs-5 fs-md-4">
-                        <i class="bi bi-gear me-2"></i>Configurazione Riferimento
-                    </h4>
-                </div>
-                <div class="card-body p-3 p-md-4">
-                    <form id="uploadForm" enctype="multipart/form-data" class="needs-validation" novalidate>
-                        <!-- Limb Type Selection -->
-                        <div class="mb-4">
-                            <label for="limbType" class="form-label fw-semibold text-dark mb-3">
-                                <i class="bi bi-diagram-3 me-2 text-primary"></i>Tipo di Arto
-                            </label>
-                            <div class="row g-2 g-md-3">
-                                <div class="col-6">
-                                    <div class="form-check card limb-option h-100" data-value="arm">
-                                        <input class="form-check-input" type="radio" name="limb_type" id="limbArm"
-                                            value="arm" required checked>
-                                        <label class="form-check-label card-body text-center p-3" for="limbArm">
-                                            <i class="bi bi-hand-thumbs-up d-block fs-4 text-primary mb-2"></i>
-                                            <h6 class="fw-bold mb-1 fs-6">Braccio</h6>
-                                            <small class="text-muted d-none d-md-block">Sensori sull'arto
-                                                superiore</small>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="form-check card limb-option h-100" data-value="leg">
-                                        <input class="form-check-input" type="radio" name="limb_type" id="limbLeg"
-                                            value="leg" required>
-                                        <label class="form-check-label card-body text-center p-3" for="limbLeg">
-                                            <i class="bi bi-shoe d-block fs-4 text-success mb-2"></i>
-                                            <h6 class="fw-bold mb-1 fs-6">Gamba</h6>
-                                            <small class="text-muted d-none d-md-block">Sensori sull'arto
-                                                inferiore</small>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Background Removal Option -->
-                        <div class="mb-4">
-                            <div class="card border-info">
-                                <div class="card-body">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="removeBackground" checked>
-                                        <label class="form-check-label fw-semibold" for="removeBackground">
-                                            <i class="bi bi-scissors me-2 text-info"></i>Rimuovi automaticamente lo sfondo
-                                        </label>
-                                        <div class="form-text mt-2">
-                                            Lo sfondo verrà rimosso automaticamente per migliorare l'analisi dei sensori
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- File Upload -->
-                        <div class="mb-4">
-                            <label for="referenceImage" class="form-label fw-semibold text-dark mb-3">
-                                <i class="bi bi-image me-2 text-primary"></i>Immagine di Riferimento
-                            </label>
-
-                            <div
-                                class="file-upload-area border-2 border-dashed rounded-3 p-4 p-md-5 text-center bg-light position-relative">
-                                <i class="bi bi-cloud-arrow-up d-block fs-1 text-muted mb-3 mb-md-4"></i>
-                                <h5 class="text-dark mb-2 mb-md-3 fs-6 fs-md-5">Trascina l'immagine qui</h5>
-                                <p class="text-muted mb-3 mb-md-4 fs-7">oppure</p>
-
-                                <div class="d-flex justify-content-center">
-                                    <input class="form-control d-none" type="file" id="referenceImage" name="file"
-                                        accept="image/*" required>
-                                    <button type="button" class="btn btn-primary px-4 px-md-5 py-2 py-md-3 touch-target"
-                                        onclick="document.getElementById('referenceImage').click()">
-                                        <i class="bi bi-folder2-open me-2"></i>Scegli File
-                                    </button>
-                                </div>
-
-                                <div class="form-text mt-3 mt-md-4 fs-7">
-                                    Formati supportati: JPG, PNG, WebP - Dimensione massima: 10MB
-                                </div>
-                            </div>
-
-                            <div id="fileInfo" class="mt-3" style="display: none;">
-                                <div class="alert alert-info d-flex align-items-center py-2">
-                                    <i class="bi bi-info-circle me-2 flex-shrink-0"></i>
-                                    <span id="fileName" class="fs-7"></span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Processing Status -->
-                        <div id="processingStatus" class="mb-4" style="display: none;">
-                            <div class="card border-warning">
-                                <div class="card-body">
-                                    <div class="d-flex align-items-center">
-                                        <div class="spinner-border spinner-border-sm text-warning me-3" role="status">
-                                            <span class="visually-hidden">Elaborazione...</span>
-                                        </div>
-                                        <div>
-                                            <h6 class="mb-1 fw-semibold" id="processingTitle">Elaborazione in corso...</h6>
-                                            <small class="text-muted" id="processingMessage">Attendere prego</small>
-                                        </div>
-                                    </div>
-                                    <div class="progress mt-3" style="height: 6px;">
-                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
-                                             role="progressbar" style="width: 0%" id="processingProgress"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Submit Button -->
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary btn-lg py-3 touch-target" id="uploadBtn">
-                                <i class="bi bi-cloud-upload me-2"></i>
-                                <span class="upload-text">Carica Immagine</span>
-                                <div class="spinner-border spinner-border-sm ms-2 d-none" role="status"
-                                    id="uploadSpinner">
-                                    <span class="visually-hidden">Caricamento...</span>
-                                </div>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Upload Result -->
-            <div id="uploadResult" class="mt-3"></div>
-
-            <div class="text-center mt-3">
-                <button type="button" class="btn btn-outline-danger" onclick="clearAllReferenceData()">
-                    <i class="bi bi-trash3"></i> Cancella Riferimento Salvato
-                </button>
-            </div>
-
-            <!-- Reference Preview -->
-            <div id="referencePreview" class="mt-4" style="display: none;">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-light py-3">
-                        <h4 class="mb-0 text-dark fs-5 fs-md-4">
-                            <i class="bi bi-eye me-2 text-primary"></i>Anteprima Immagine Caricata
+                <!-- Upload Card -->
+                <div class="card border-0 shadow-lg mb-4">
+                    <div class="card-header bg-gradient-primary text-white py-3">
+                        <h4 class="mb-0 fs-5 fs-md-4">
+                            <i class="bi bi-gear me-2"></i>Configurazione Riferimento
                         </h4>
                     </div>
                     <div class="card-body p-3 p-md-4">
-                        <div class="text-center position-relative">
-                            <img id="previewImage" src="" alt="Preview dell'immagine di riferimento"
-                                class="img-fluid rounded shadow preview-image touch-target"
-                                style="max-height: 50vh; min-height: 200px; cursor: zoom-in;">
-                            <div class="mt-2">
-                                <small class="text-muted fs-7">
-                                    <i class="bi bi-zoom-in me-1"></i>Tocca per ingrandire
-                                </small>
+                        <form id="uploadForm" enctype="multipart/form-data" class="needs-validation" novalidate>
+                            <!-- Limb Type Selection -->
+                            <div class="mb-4">
+                                <label for="limbType" class="form-label fw-semibold text-dark mb-3">
+                                    <i class="bi bi-diagram-3 me-2 text-primary"></i>Tipo di Arto
+                                </label>
+                                <div class="row g-2 g-md-3">
+                                    <div class="col-6">
+                                        <div class="form-check card limb-option h-100" data-value="arm">
+                                            <input class="form-check-input" type="radio" name="limb_type" id="limbArm"
+                                                   value="arm" required checked>
+                                            <label class="form-check-label card-body text-center p-3" for="limbArm">
+                                                <i class="bi bi-hand-thumbs-up d-block fs-4 text-primary mb-2"></i>
+                                                <h6 class="fw-bold mb-1 fs-6">Braccio</h6>
+                                                <small class="text-muted d-none d-md-block">Sensori sull'arto
+                                                    superiore</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-check card limb-option h-100" data-value="leg">
+                                            <input class="form-check-input" type="radio" name="limb_type" id="limbLeg"
+                                                   value="leg" required>
+                                            <label class="form-check-label card-body text-center p-3" for="limbLeg">
+                                                <i class="bi bi-shoe d-block fs-4 text-success mb-2"></i>
+                                                <h6 class="fw-bold mb-1 fs-6">Gamba</h6>
+                                                <small class="text-muted d-none d-md-block">Sensori sull'arto
+                                                    inferiore</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Background Removal Option -->
+                            <div class="mb-4">
+                                <div class="card border-info">
+                                    <div class="card-body">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="removeBackground"
+                                                   checked>
+                                            <label class="form-check-label fw-semibold" for="removeBackground">
+                                                <i class="bi bi-scissors me-2 text-info"></i>Rimuovi automaticamente lo
+                                                sfondo
+                                            </label>
+                                            <div class="form-text mt-2">
+                                                Lo sfondo verrà rimosso automaticamente per migliorare l'analisi dei
+                                                sensori
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- File Upload -->
+                            <div class="mb-4">
+                                <label for="referenceImage" class="form-label fw-semibold text-dark mb-3">
+                                    <i class="bi bi-image me-2 text-primary"></i>Immagine di Riferimento
+                                </label>
+
+                                <div
+                                        class="file-upload-area border-2 border-dashed rounded-3 p-4 p-md-5 text-center bg-light position-relative">
+                                    <i class="bi bi-cloud-arrow-up d-block fs-1 text-muted mb-3 mb-md-4"></i>
+                                    <h5 class="text-dark mb-2 mb-md-3 fs-6 fs-md-5">Trascina l'immagine qui</h5>
+                                    <p class="text-muted mb-3 mb-md-4 fs-7">oppure</p>
+
+                                    <div class="d-flex justify-content-center">
+                                        <input class="form-control d-none" type="file" id="referenceImage" name="file"
+                                               accept="image/*" required>
+                                        <button type="button"
+                                                class="btn btn-primary px-4 px-md-5 py-2 py-md-3 touch-target"
+                                                onclick="document.getElementById('referenceImage').click()">
+                                            <i class="bi bi-folder2-open me-2"></i>Scegli File
+                                        </button>
+                                    </div>
+
+                                    <div class="form-text mt-3 mt-md-4 fs-7">
+                                        Formati supportati: JPG, PNG, WebP - Dimensione massima: 10MB
+                                    </div>
+                                </div>
+
+                                <div id="fileInfo" class="mt-3" style="display: none;">
+                                    <div class="alert alert-info d-flex align-items-center py-2">
+                                        <i class="bi bi-info-circle me-2 flex-shrink-0"></i>
+                                        <span id="fileName" class="fs-7"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Processing Status -->
+                            <div id="processingStatus" class="mb-4" style="display: none;">
+                                <div class="card border-warning">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center">
+                                            <div class="spinner-border spinner-border-sm text-warning me-3"
+                                                 role="status">
+                                                <span class="visually-hidden">Elaborazione...</span>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1 fw-semibold" id="processingTitle">Elaborazione in
+                                                    corso...</h6>
+                                                <small class="text-muted" id="processingMessage">Attendere prego</small>
+                                            </div>
+                                        </div>
+                                        <div class="progress mt-3" style="height: 6px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                                                 role="progressbar" style="width: 0%" id="processingProgress"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-lg py-3 touch-target" id="uploadBtn">
+                                    <i class="bi bi-cloud-upload me-2"></i>
+                                    <span class="upload-text">Carica Immagine</span>
+                                    <div class="spinner-border spinner-border-sm ms-2 d-none" role="status"
+                                         id="uploadSpinner">
+                                        <span class="visually-hidden">Caricamento...</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Upload Result -->
+                <div id="uploadResult" class="mt-3"></div>
+
+                <div class="text-center mt-3">
+                    <button type="button" class="btn btn-outline-danger" onclick="clearAllReferenceData()">
+                        <i class="bi bi-trash3"></i> Cancella Riferimento Salvato
+                    </button>
+                </div>
+
+                <!-- Reference Preview -->
+                <div id="referencePreview" class="mt-4" style="display: none;">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-light py-3">
+                            <h4 class="mb-0 text-dark fs-5 fs-md-4">
+                                <i class="bi bi-eye me-2 text-primary"></i>Anteprima Immagine Caricata
+                            </h4>
+                        </div>
+                        <div class="card-body p-3 p-md-4">
+                            <div class="text-center position-relative">
+                                <img id="previewImage" src="" alt="Preview dell'immagine di riferimento"
+                                     class="img-fluid rounded shadow preview-image touch-target"
+                                     style="max-height: 50vh; min-height: 200px; cursor: zoom-in;">
+                                <div class="mt-2">
+                                    <small class="text-muted fs-7">
+                                        <i class="bi bi-zoom-in me-1"></i>Tocca per ingrandire
+                                    </small>
+                                </div>
+                            </div>
+
+                            <!-- Image Info -->
+                            <div id="previewInfo" class="row mt-3 mt-md-4 text-center g-2">
+                                <!-- Info will be populated by JavaScript -->
                             </div>
                         </div>
+                    </div>
+                </div>
 
-                        <!-- Image Info -->
-                        <div id="previewInfo" class="row mt-3 mt-md-4 text-center g-2">
-                            <!-- Info will be populated by JavaScript -->
+                <!-- Landmark Detection Results -->
+                <div id="landmarkResults" class="mt-4" style="display: none;">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-gradient-primary text-white py-3">
+                            <h4 class="mb-0 text-white fs-5 fs-md-4">
+                                <i class="bi bi-geo-alt me-2"></i>Landmark e Posizioni Sensori Rilevati
+                            </h4>
+                        </div>
+                        <div class="card-body p-3 p-md-4">
+                            <!-- Tabs for Original vs Annotated -->
+                            <ul class="nav nav-tabs mb-3" id="imageTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="original-tab" data-bs-toggle="tab"
+                                            data-bs-target="#original-pane" type="button" role="tab">
+                                        <i class="bi bi-image me-1"></i>Originale
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="annotated-tab" data-bs-toggle="tab"
+                                            data-bs-target="#annotated-pane" type="button" role="tab">
+                                        <i class="bi bi-geo-alt-fill me-1"></i>Con Landmark
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content" id="imageTabsContent">
+                                <!-- Original Image -->
+                                <div class="tab-pane fade show active" id="original-pane" role="tabpanel">
+                                    <div class="text-center">
+                                        <img id="originalImage" src="" alt="Immagine originale"
+                                             class="img-fluid rounded shadow"
+                                             style="max-height: 60vh; cursor: zoom-in;">
+                                    </div>
+                                </div>
+
+                                <!-- Annotated Image -->
+                                <div class="tab-pane fade" id="annotated-pane" role="tabpanel">
+                                    <div class="text-center">
+                                        <img id="annotatedImage" src="" alt="Immagine con landmark"
+                                             class="img-fluid rounded shadow"
+                                             style="max-height: 60vh; cursor: zoom-in;">
+                                    </div>
+
+                                    <!-- Legenda per l'immagine annotata -->
+                                    <div class="mt-3">
+                                        <div class="card border-0 bg-light">
+                                            <div class="card-body p-3">
+                                                <h6 class="mb-3"><i class="bi bi-info-circle me-2"></i>Legenda
+                                                    Annotazioni</h6>
+
+                                                <div class="row g-3">
+                                                    <!-- Landmark -->
+                                                    <div class="col-md-6">
+                                                        <div class="border-start border-4 border-primary ps-3">
+                                                            <strong class="d-block mb-2">Landmark Anatomici</strong>
+                                                            <div class="d-flex flex-column gap-2">
+                                                                <div class="d-flex align-items-center">
+                                                                    <span class="badge bg-success me-2"
+                                                                          style="width: 20px; height: 20px; border-radius: 50%;"></span>
+                                                                    <small>Verde = Alta confidenza (≥75%)</small>
+                                                                </div>
+                                                                <div class="d-flex align-items-center">
+                                                                    <span class="badge bg-warning me-2"
+                                                                          style="width: 20px; height: 20px; border-radius: 50%;"></span>
+                                                                    <small>Giallo = Media confidenza (40-75%)</small>
+                                                                </div>
+                                                                <div class="d-flex align-items-center">
+                                                                    <span class="badge bg-danger me-2"
+                                                                          style="width: 20px; height: 20px; border-radius: 50%;"></span>
+                                                                    <small>Rosso = Bassa confidenza (&lt;40%)</small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Sensori -->
+                                                    <div class="col-md-6">
+                                                        <div class="border-start border-4 border-success ps-3">
+                                                            <strong class="d-block mb-2">Posizioni Sensori</strong>
+                                                            <div class="d-flex flex-column gap-2" id="sensorLegend">
+                                                                <!-- Popolato dinamicamente -->
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mt-3 pt-3 border-top">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-lightbulb me-1"></i>
+                                                        <strong>Suggerimento:</strong> Le linee tratteggiate collegano i
+                                                        landmark usati per calcolare ogni posizione del sensore
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Landmark Info Cards -->
+                            <div id="landmarkInfo" class="mt-4">
+                                <!-- Will be populated by JavaScript -->
+                            </div>
+
+                            <!-- Sensor Positions Cards -->
+                            <div id="sensorPositions" class="mt-4">
+                                <!-- Will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Section -->
+                <div class="card border-0 bg-light mt-4">
+                    <div class="card-body p-3 p-md-4">
+                        <h5 class="card-title text-dark mb-3 fs-5 fs-md-4">
+                            <i class="bi bi-question-circle me-2 text-primary"></i>Linee Guida
+                        </h5>
+                        <div class="row">
+                            <div class="col-12 col-md-6">
+                                <ul class="list-unstyled mb-3 mb-md-0">
+                                    <li class="mb-2 d-flex align-items-start">
+                                        <i class="bi bi-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
+                                        <span class="fs-7">Buona illuminazione</span>
+                                    </li>
+                                    <li class="mb-2 d-flex align-items-start">
+                                        <i class="bi bi-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
+                                        <span class="fs-7">Posizione naturale</span>
+                                    </li>
+                                    <li class="mb-2 d-flex align-items-start">
+                                        <i class="bi bi-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
+                                        <span class="fs-7">Tutti i sensori visibili</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <ul class="list-unstyled">
+                                    <li class="mb-2 d-flex align-items-start">
+                                        <i class="bi bi-x-circle text-danger me-2 mt-1 flex-shrink-0"></i>
+                                        <span class="fs-7">No immagini sfocate</span>
+                                    </li>
+                                    <li class="mb-2 d-flex align-items-start">
+                                        <i class="bi bi-x-circle text-danger me-2 mt-1 flex-shrink-0"></i>
+                                        <span class="fs-7">No ostacoli sui sensori</span>
+                                    </li>
+                                    <li class="mb-2 d-flex align-items-start">
+                                        <i class="bi bi-x-circle text-danger me-2 mt-1 flex-shrink-0"></i>
+                                        <span class="fs-7">No angolazioni estreme</span>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Help Section -->
-            <div class="card border-0 bg-light mt-4">
-                <div class="card-body p-3 p-md-4">
-                    <h5 class="card-title text-dark mb-3 fs-5 fs-md-4">
-                        <i class="bi bi-question-circle me-2 text-primary"></i>Linee Guida
+    <!-- Modal per l'ingrandimento dell'immagine -->
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content bg-dark">
+                <div class="modal-header bg-dark border-bottom-0 py-3">
+                    <h5 class="modal-title text-white fs-6" id="imageModalLabel">
+                        <i class="bi bi-zoom-in me-2"></i>Anteprima Dettagliata
                     </h5>
-                    <div class="row">
-                        <div class="col-12 col-md-6">
-                            <ul class="list-unstyled mb-3 mb-md-0">
-                                <li class="mb-2 d-flex align-items-start">
-                                    <i class="bi bi-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
-                                    <span class="fs-7">Buona illuminazione</span>
-                                </li>
-                                <li class="mb-2 d-flex align-items-start">
-                                    <i class="bi bi-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
-                                    <span class="fs-7">Posizione naturale</span>
-                                </li>
-                                <li class="mb-2 d-flex align-items-start">
-                                    <i class="bi bi-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
-                                    <span class="fs-7">Tutti i sensori visibili</span>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <ul class="list-unstyled">
-                                <li class="mb-2 d-flex align-items-start">
-                                    <i class="bi bi-x-circle text-danger me-2 mt-1 flex-shrink-0"></i>
-                                    <span class="fs-7">No immagini sfocate</span>
-                                </li>
-                                <li class="mb-2 d-flex align-items-start">
-                                    <i class="bi bi-x-circle text-danger me-2 mt-1 flex-shrink-0"></i>
-                                    <span class="fs-7">No ostacoli sui sensori</span>
-                                </li>
-                                <li class="mb-2 d-flex align-items-start">
-                                    <i class="bi bi-x-circle text-danger me-2 mt-1 flex-shrink-0"></i>
-                                    <span class="fs-7">No angolazioni estreme</span>
-                                </li>
-                            </ul>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi">
+                    </button>
+                </div>
+                <div class="modal-body p-0 d-flex align-items-center justify-content-center position-relative">
+                    <div class="image-container position-relative" style="touch-action: none;">
+                        <img id="modalImage" src="" alt="Immagine ingrandita" class="img-fluid"
+                             style="max-height: 80vh; max-width: 100%;">
+                    </div>
+
+                    <!-- Controlli Zoom Mobile -->
+                    <div
+                            class="zoom-controls-mobile position-absolute bottom-0 start-50 translate-middle-x mb-3 d-flex gap-2 bg-dark bg-opacity-75 rounded-pill p-2">
+                        <button type="button" class="btn btn-outline-light btn-sm rounded-circle touch-target-zoom"
+                                id="zoomOutMobile" aria-label="Riduci zoom">
+                            <i class="bi bi-dash-lg"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-light btn-sm rounded-circle touch-target-zoom"
+                                id="zoomResetMobile" aria-label="Reimposta zoom">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-light btn-sm rounded-circle touch-target-zoom"
+                                id="zoomInMobile" aria-label="Aumenta zoom">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer bg-dark border-top-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                        <button type="button" class="btn btn-outline-light touch-target" data-bs-dismiss="modal">
+                            <i class="bi bi-x-lg me-1"></i>Chiudi
+                        </button>
+                        <div class="d-none d-md-flex gap-2">
+                            <button type="button" class="btn btn-outline-light btn-sm touch-target" id="zoomOut">
+                                <i class="bi bi-zoom-out"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-light btn-sm touch-target" id="zoomReset">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-light btn-sm touch-target" id="zoomIn">
+                                <i class="bi bi-zoom-in"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
-
-<!-- Modal per l'ingrandimento dell'immagine -->
-<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel">
-    <div class="modal-dialog modal-fullscreen">
-        <div class="modal-content bg-dark">
-            <div class="modal-header bg-dark border-bottom-0 py-3">
-                <h5 class="modal-title text-white fs-6" id="imageModalLabel">
-                    <i class="bi bi-zoom-in me-2"></i>Anteprima Dettagliata
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi">
-                </button>
-            </div>
-            <div class="modal-body p-0 d-flex align-items-center justify-content-center position-relative">
-                <div class="image-container position-relative" style="touch-action: none;">
-                    <img id="modalImage" src="" alt="Immagine ingrandita" class="img-fluid"
-                        style="max-height: 80vh; max-width: 100%;">
-                </div>
-
-                <!-- Controlli Zoom Mobile -->
-                <div
-                    class="zoom-controls-mobile position-absolute bottom-0 start-50 translate-middle-x mb-3 d-flex gap-2 bg-dark bg-opacity-75 rounded-pill p-2">
-                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle touch-target-zoom"
-                        id="zoomOutMobile" aria-label="Riduci zoom">
-                        <i class="bi bi-dash-lg"></i>
-                    </button>
-                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle touch-target-zoom"
-                        id="zoomResetMobile" aria-label="Reimposta zoom">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </button>
-                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle touch-target-zoom"
-                        id="zoomInMobile" aria-label="Aumenta zoom">
-                        <i class="bi bi-plus-lg"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="modal-footer bg-dark border-top-0 py-3">
-                <div class="d-flex justify-content-between align-items-center w-100">
-                    <button type="button" class="btn btn-outline-light touch-target" data-bs-dismiss="modal">
-                        <i class="bi bi-x-lg me-1"></i>Chiudi
-                    </button>
-                    <div class="d-none d-md-flex gap-2">
-                        <button type="button" class="btn btn-outline-light btn-sm touch-target" id="zoomOut">
-                            <i class="bi bi-zoom-out"></i>
-                        </button>
-                        <button type="button" class="btn btn-outline-light btn-sm touch-target" id="zoomReset">
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                        </button>
-                        <button type="button" class="btn btn-outline-light btn-sm touch-target" id="zoomIn">
-                            <i class="bi bi-zoom-in"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
-<style>
-    .upload-section {
-        padding: 1rem 0;
-    }
+    <style>
+        .upload-section {
+            padding: 1rem 0;
+        }
 
-    .upload-icon {
-        width: 70px;
-        height: 70px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
+        .upload-icon {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-    .bg-gradient-primary {
-        background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%) !important;
-    }
+        .bg-gradient-primary {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%) !important;
+        }
 
-    .file-upload-area {
-        border-color: #dee2e6 !important;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        min-height: 220px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .file-upload-area:hover {
-        border-color: #3498db !important;
-        background-color: #f8f9fa !important;
-    }
-
-    .file-upload-area.dragover {
-        border-color: #3498db !important;
-        background-color: #e3f2fd !important;
-    }
-
-    .limb-option {
-        border: 2px solid #e9ecef;
-        border-radius: 10px;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        min-height: 100px;
-    }
-
-    .limb-option:hover {
-        border-color: #3498db;
-        transform: translateY(-2px);
-    }
-
-    .limb-option .form-check-input {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-    }
-
-    .limb-option .form-check-label {
-        padding-left: 2rem !important;
-        cursor: pointer;
-        width: 100%;
-    }
-
-    .form-check-input:checked+.form-check-label {
-        background-color: #e3f2fd;
-        border-radius: 8px;
-    }
-
-    .preview-stats {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-radius: 8px;
-        padding: 1rem;
-    }
-
-    .stat-value {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2c3e50;
-        display: block;
-    }
-
-    .stat-label {
-        color: #6c757d;
-        font-size: 0.8rem;
-    }
-
-    .preview-image {
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        width: 100%;
-        object-fit: contain;
-    }
-
-    .preview-image:hover {
-        transform: scale(1.02);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
-    }
-
-    .touch-target {
-        min-height: 44px;
-        min-width: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .touch-target-zoom {
-        width: 44px;
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .fs-7 {
-        font-size: 0.8rem !important;
-    }
-
-    @media (max-width: 768px) {
         .file-upload-area {
-            min-height: 200px;
-            padding: 2rem 1rem !important;
+            border-color: #dee2e6 !important;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            min-height: 220px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
-    }
-</style>
 
-<script>
-    console.log('🚀 Inizializzazione upload.html - versione con rimozione background');
-
-    function clearOldReference() {
-        try {
-            localStorage.removeItem('referenceImage');
-            localStorage.removeItem('referenceMetadata');
-            console.log('🗑️ Vecchio riferimento rimosso dal localStorage');
-        } catch (error) {
-            console.error('Errore durante la pulizia del localStorage:', error);
-            return false;
+        .file-upload-area:hover {
+            border-color: #3498db !important;
+            background-color: #f8f9fa !important;
         }
-    }
 
-    function saveReferenceToLocalStorage(imageBase64, metadata) {
-        try {
-            const imageData = imageBase64.startsWith('data:')
-                ? imageBase64
-                : `data:image/png;base64,${imageBase64}`;
+        .file-upload-area.dragover {
+            border-color: #3498db !important;
+            background-color: #e3f2fd !important;
+        }
 
-            localStorage.setItem('referenceImage', imageData);
-            localStorage.setItem('referenceMetadata', JSON.stringify(metadata));
+        .limb-option {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            min-height: 100px;
+        }
 
-            console.log('💾 Nuovo riferimento salvato nel localStorage');
-            console.log('   - Dimensione immagine:', Math.round(imageData.length / 1024), 'KB');
-            console.log('   - Metadata:', metadata);
+        .limb-option:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+        }
 
-            return true;
-        } catch (error) {
-            if (error.name === 'QuotaExceededError') {
-                console.error('❌ localStorage pieno! Impossibile salvare l\'immagine.');
-                showError('Immagine troppo grande per il localStorage. Riduci la risoluzione.');
-            } else {
-                console.error('❌ Errore salvataggio localStorage:', error);
+        .limb-option .form-check-input {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+        }
+
+        .limb-option .form-check-label {
+            padding-left: 2rem !important;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .form-check-input:checked + .form-check-label {
+            background-color: #e3f2fd;
+            border-radius: 8px;
+        }
+
+        .preview-stats {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2c3e50;
+            display: block;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.8rem;
+        }
+
+        .preview-image {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            width: 100%;
+            object-fit: contain;
+        }
+
+        .preview-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .touch-target-zoom {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fs-7 {
+            font-size: 0.8rem !important;
+        }
+
+        @media (max-width: 768px) {
+            .file-upload-area {
+                min-height: 200px;
+                padding: 2rem 1rem !important;
             }
-            return false;
         }
-    }
+    </style>
 
-    // Funzione per rimuovere lo sfondo
-    async function removeImageBackground(imageBase64) {
-        console.log('🔄 Invio richiesta rimozione sfondo...');
+    <script>
+        console.log('🚀 Inizializzazione upload.html - versione con rimozione background');
 
-        updateProcessingStatus('Rimozione sfondo in corso...', 'Elaborazione con AI...', 30);
-
-        try {
-            const response = await fetch('/api/remove_background', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    image_base64: imageBase64,
-                    use_preprocess: true,
-                    resize_max: 1024,
-                    grabcut_if_failed: true
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (result.success) {
-                console.log('✅ Sfondo rimosso con successo usando:', result.method);
-                updateProcessingStatus('Sfondo rimosso!', `Metodo: ${result.method}`, 60);
-                return result.image_base64;
-            } else {
-                console.error('❌ Errore rimozione sfondo:', result.error);
-                showWarning('⚠️ Impossibile rimuovere lo sfondo, uso immagine originale');
-                return imageBase64;
-            }
-        } catch (error) {
-            console.error('❌ Errore durante la rimozione dello sfondo:', error);
-            showWarning('⚠️ Errore nella rimozione sfondo, uso immagine originale');
-            return imageBase64;
-        }
-    }
-
-    function updateProcessingStatus(title, message, progress) {
-        const statusDiv = document.getElementById('processingStatus');
-        const titleEl = document.getElementById('processingTitle');
-        const messageEl = document.getElementById('processingMessage');
-        const progressBar = document.getElementById('processingProgress');
-
-        if (statusDiv && titleEl && messageEl && progressBar) {
-            statusDiv.style.display = 'block';
-            titleEl.textContent = title;
-            messageEl.textContent = message;
-            progressBar.style.width = progress + '%';
-        }
-    }
-
-    function hideProcessingStatus() {
-        const statusDiv = document.getElementById('processingStatus');
-        if (statusDiv) {
-            statusDiv.style.display = 'none';
-        }
-    }
-
-    // Global variables
-    let imageModalInstance = null;
-    let currentScale = 1;
-    const minScale = 0.5;
-    const maxScale = 5;
-    const scaleStep = 0.25;
-
-    // Initialization
-    document.addEventListener('DOMContentLoaded', function () {
-        console.log('✅ DOM loaded, inizializzazione componenti...');
-        initializeUploadForm();
-        initializeImageModal();
-    });
-
-    function initializeUploadForm() {
-        const uploadForm = document.getElementById('uploadForm');
-        const fileUploadArea = document.querySelector('.file-upload-area');
-        const fileInput = document.getElementById('referenceImage');
-        const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-
-        // Touch handling for upload area
-        if (fileUploadArea) {
-            fileUploadArea.addEventListener('touchstart', function (e) {
-                e.preventDefault();
-                this.classList.add('dragover');
-            });
-
-            fileUploadArea.addEventListener('touchend', function (e) {
-                e.preventDefault();
-                this.classList.remove('dragover');
-                fileInput.click();
-            });
-
-            // Drag and drop for desktop
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                fileUploadArea.addEventListener(eventName, preventDefaults, false);
-            });
-
-            ['dragenter', 'dragover'].forEach(eventName => {
-                fileUploadArea.addEventListener(eventName, highlight, false);
-            });
-
-            ['dragleave', 'drop'].forEach(eventName => {
-                fileUploadArea.addEventListener(eventName, unhighlight, false);
-            });
-
-            fileUploadArea.addEventListener('drop', handleDrop, false);
-        }
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        function highlight() {
-            fileUploadArea.classList.add('dragover');
-        }
-
-        function unhighlight() {
-            fileUploadArea.classList.remove('dragover');
-        }
-
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            fileInput.files = files;
-            handleFiles(files);
-        }
-
-        // File selection handling
-        if (fileInput) {
-            fileInput.addEventListener('change', function (e) {
-                handleFiles(this.files);
-            });
-        }
-
-        function handleFiles(files) {
-            if (files.length > 0) {
-                const file = files[0];
-                const fileSize = (file.size / 1024 / 1024).toFixed(2);
-                fileName.textContent = `File selezionato: ${file.name} (${fileSize} MB)`;
-                fileInfo.style.display = 'block';
-
-                console.log(`📁 File selezionato: ${file.name} (${fileSize} MB)`);
-
-                // Get limb type
-                const limbType = document.querySelector('input[name="limb_type"]:checked').value;
-                console.log(`🦾 Tipo di arto: ${limbType}`);
-
-                // Read and preview image
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    console.log('📤 Mostra anteprima immagine...');
-
-                    // Display preview
-                    const previewDiv = document.getElementById('referencePreview');
-                    const previewImg = document.getElementById('previewImage');
-
-                    if (previewDiv && previewImg) {
-                        previewImg.src = e.target.result;
-                        previewDiv.style.display = 'block';
-
-                        // Update stats
-                        updateImageInfo(file, limbType);
-
-                        // Save to memory
-                        window.referenceData = {
-                            image: e.target.result,
-                            metadata: {
-                                limbType: limbType,
-                                fileName: file.name,
-                                fileSize: file.size,
-                                uploadDate: new Date().toISOString()
-                            }
-                        };
-
-                        console.log('✅ Immagine caricata in memoria');
-
-                        // Show preview success indicator
-                        const previewCard = previewDiv.querySelector('.card');
-                        if (previewCard) {
-                            previewCard.classList.add('border-info');
-                            previewCard.style.borderWidth = '2px';
-                        }
-                    }
-                };
-                reader.readAsDataURL(file);
+        function clearOldReference() {
+            try {
+                localStorage.removeItem('referenceImage');
+                localStorage.removeItem('referenceMetadata');
+                console.log('🗑️ Vecchio riferimento rimosso dal localStorage');
+            } catch (error) {
+                console.error('Errore durante la pulizia del localStorage:', error);
+                return false;
             }
         }
 
-        // Limb type selection handling
-        const limbOptions = document.querySelectorAll('.limb-option');
-        limbOptions.forEach(option => {
-            option.addEventListener('click', function () {
-                const radio = this.querySelector('input[type="radio"]');
-                radio.checked = true;
+        function saveReferenceToLocalStorage(imageBase64, metadata) {
+            try {
+                const imageData = imageBase64.startsWith('data:')
+                    ? imageBase64
+                    : `data:image/png;base64,${imageBase64}`;
 
-                limbOptions.forEach(opt => opt.style.borderColor = '#e9ecef');
-                this.style.borderColor = '#3498db';
-            });
-        });
+                localStorage.setItem('referenceImage', imageData);
+                localStorage.setItem('referenceMetadata', JSON.stringify(metadata));
 
-        // Form submission
-        if (uploadForm) {
-            uploadForm.addEventListener('submit', async function (e) {
-                e.preventDefault();
+                console.log('💾 Nuovo riferimento salvato nel localStorage');
+                console.log('   - Dimensione immagine:', Math.round(imageData.length / 1024), 'KB');
+                console.log('   - Metadata:', metadata);
 
-                const uploadBtn = document.getElementById('uploadBtn');
-                const uploadSpinner = document.getElementById('uploadSpinner');
-                const removeBackgroundCheckbox = document.getElementById('removeBackground');
+                return true;
+            } catch (error) {
+                if (error.name === 'QuotaExceededError') {
+                    console.error('❌ localStorage pieno! Impossibile salvare l\'immagine.');
+                    showError('Immagine troppo grande per il localStorage. Riduci la risoluzione.');
+                } else {
+                    console.error('❌ Errore salvataggio localStorage:', error);
+                }
+                return false;
+            }
+        }
 
-                if (!fileInput.files || fileInput.files.length === 0) {
-                    showError('❌ Seleziona un\'immagine prima di caricare');
-                    return;
+        // Funzione per rimuovere lo sfondo
+        async function removeImageBackground(imageBase64) {
+            console.log('🔄 Invio richiesta rimozione sfondo...');
+
+            updateProcessingStatus('Rimozione sfondo in corso...', 'Elaborazione con AI...', 30);
+
+            try {
+                const response = await fetch('/api/remove_background', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        image_base64: imageBase64,
+                        use_preprocess: true,
+                        resize_max: 1024,
+                        grabcut_if_failed: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
-                clearOldReference();
+                const result = await response.json();
 
-                // Show spinner and disable button
-                uploadBtn.disabled = true;
-                uploadSpinner.classList.remove('d-none');
-                updateProcessingStatus('Preparazione...', 'Lettura file...', 10);
+                if (result.success) {
+                    console.log('✅ Sfondo rimosso con successo usando:', result.method);
+                    updateProcessingStatus('Sfondo rimosso!', `Metodo: ${result.method}`, 60);
+                    return result.image_base64;
+                } else {
+                    console.error('❌ Errore rimozione sfondo:', result.error);
+                    showWarning('⚠️ Impossibile rimuovere lo sfondo, uso immagine originale');
+                    return imageBase64;
+                }
+            } catch (error) {
+                console.error('❌ Errore durante la rimozione dello sfondo:', error);
+                showWarning('⚠️ Errore nella rimozione sfondo, uso immagine originale');
+                return imageBase64;
+            }
+        }
 
-                try {
+        function updateProcessingStatus(title, message, progress) {
+            const statusDiv = document.getElementById('processingStatus');
+            const titleEl = document.getElementById('processingTitle');
+            const messageEl = document.getElementById('processingMessage');
+            const progressBar = document.getElementById('processingProgress');
+
+            if (statusDiv && titleEl && messageEl && progressBar) {
+                statusDiv.style.display = 'block';
+                titleEl.textContent = title;
+                messageEl.textContent = message;
+                progressBar.style.width = progress + '%';
+            }
+        }
+
+        function hideProcessingStatus() {
+            const statusDiv = document.getElementById('processingStatus');
+            if (statusDiv) {
+                statusDiv.style.display = 'none';
+            }
+        }
+
+        // Global variables
+        let imageModalInstance = null;
+        let currentScale = 1;
+        const minScale = 0.5;
+        const maxScale = 5;
+        const scaleStep = 0.25;
+
+        // Initialization
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('✅ DOM loaded, inizializzazione componenti...');
+            initializeUploadForm();
+            initializeImageModal();
+        });
+
+        function initializeUploadForm() {
+            const uploadForm = document.getElementById('uploadForm');
+            const fileUploadArea = document.querySelector('.file-upload-area');
+            const fileInput = document.getElementById('referenceImage');
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+
+            // Touch handling for upload area
+            if (fileUploadArea) {
+                fileUploadArea.addEventListener('touchstart', function (e) {
+                    e.preventDefault();
+                    this.classList.add('dragover');
+                });
+
+                fileUploadArea.addEventListener('touchend', function (e) {
+                    e.preventDefault();
+                    this.classList.remove('dragover');
+                    fileInput.click();
+                });
+
+                // Drag and drop for desktop
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    fileUploadArea.addEventListener(eventName, preventDefaults, false);
+                });
+
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    fileUploadArea.addEventListener(eventName, highlight, false);
+                });
+
+                ['dragleave', 'drop'].forEach(eventName => {
+                    fileUploadArea.addEventListener(eventName, unhighlight, false);
+                });
+
+                fileUploadArea.addEventListener('drop', handleDrop, false);
+            }
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function highlight() {
+                fileUploadArea.classList.add('dragover');
+            }
+
+            function unhighlight() {
+                fileUploadArea.classList.remove('dragover');
+            }
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                fileInput.files = files;
+                handleFiles(files);
+            }
+
+            // File selection handling
+            if (fileInput) {
+                fileInput.addEventListener('change', function (e) {
+                    handleFiles(this.files);
+                });
+            }
+
+            function handleFiles(files) {
+                if (files.length > 0) {
+                    const file = files[0];
+                    const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                    fileName.textContent = `File selezionato: ${file.name} (${fileSize} MB)`;
+                    fileInfo.style.display = 'block';
+
+                    console.log(`📁 File selezionato: ${file.name} (${fileSize} MB)`);
+
                     // Get limb type
                     const limbType = document.querySelector('input[name="limb_type"]:checked').value;
+                    console.log(`🦾 Tipo di arto: ${limbType}`);
 
-                    // Read file as base64
-                    const file = fileInput.files[0];
-                    let imageBase64 = await fileToBase64(file);
+                    // Read and preview image
+                    const reader = new FileReader();
+                    reader.onload = function (e) {
+                        console.log('📤 Mostra anteprima immagine...');
 
-                    // Remove background if enabled
-                    if (removeBackgroundCheckbox.checked) {
-                        console.log('🔄 Rimozione sfondo abilitata');
-                        imageBase64 = await removeImageBackground(imageBase64);
-                    } else {
-                        console.log('ℹ️ Rimozione sfondo disabilitata');
-                        updateProcessingStatus('Preparazione completata', 'Sfondo non rimosso', 60);
+                        // Display preview
+                        const previewDiv = document.getElementById('referencePreview');
+                        const previewImg = document.getElementById('previewImage');
+
+                        if (previewDiv && previewImg) {
+                            previewImg.src = e.target.result;
+                            previewDiv.style.display = 'block';
+
+                            // Update stats
+                            updateImageInfo(file, limbType);
+
+                            // Save to memory
+                            window.referenceData = {
+                                image: e.target.result,
+                                metadata: {
+                                    limbType: limbType,
+                                    fileName: file.name,
+                                    fileSize: file.size,
+                                    uploadDate: new Date().toISOString()
+                                }
+                            };
+
+                            console.log('✅ Immagine caricata in memoria');
+
+                            // Show preview success indicator
+                            const previewCard = previewDiv.querySelector('.card');
+                            if (previewCard) {
+                                previewCard.classList.add('border-info');
+                                previewCard.style.borderWidth = '2px';
+                            }
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+
+            // Limb type selection handling
+            const limbOptions = document.querySelectorAll('.limb-option');
+            limbOptions.forEach(option => {
+                option.addEventListener('click', function () {
+                    const radio = this.querySelector('input[type="radio"]');
+                    radio.checked = true;
+
+                    limbOptions.forEach(opt => opt.style.borderColor = '#e9ecef');
+                    this.style.borderColor = '#3498db';
+                });
+            });
+
+            // Form submission
+            if (uploadForm) {
+                uploadForm.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+
+                    const uploadBtn = document.getElementById('uploadBtn');
+                    const uploadSpinner = document.getElementById('uploadSpinner');
+                    const removeBackgroundCheckbox = document.getElementById('removeBackground');
+
+                    if (!fileInput.files || fileInput.files.length === 0) {
+                        showError('❌ Seleziona un\'immagine prima di caricare');
+                        return;
                     }
 
-                    // Update preview with processed image
-                    const previewImg = document.getElementById('previewImage');
-                    if (previewImg) {
-                        previewImg.src = imageBase64;
-                    }
+                    clearOldReference();
 
-                    updateProcessingStatus('Caricamento sul server...', 'Invio dati...', 70);
+                    // Show spinner and disable button
+                    uploadBtn.disabled = true;
+                    uploadSpinner.classList.remove('d-none');
+                    updateProcessingStatus('Preparazione...', 'Lettura file...', 10);
 
-                    // Create FormData for server upload
-                    const formData = new FormData();
+                    try {
+                        // Get limb type
+                        const limbType = document.querySelector('input[name="limb_type"]:checked').value;
 
-                    // Convert base64 back to blob for upload
-                    const blob = await base64ToBlob(imageBase64);
-                    formData.append('file', blob, file.name);
-                    formData.append('limb_type', limbType);
+                        // Read file as base64
+                        const file = fileInput.files[0];
+                        let imageBase64 = await fileToBase64(file);
 
-                    // Upload to server
-                    const response = await fetch('/api/upload_reference', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    const result = await response.json();
-
-                    updateProcessingStatus('Salvataggio locale...', 'Quasi fatto...', 90);
-
-                    if (result.success) {
-                        console.log('✅ Upload completato:', result);
-
-                        const metadata = {
-                            limbType: result.limb_type || limbType,
-                            fileName: result.filename,
-                            uploadDate: new Date().toISOString(),
-                            session_id: result.session_id,
-                            fileSize: file.size,
-                            backgroundRemoved: removeBackgroundCheckbox.checked
-                        };
-
-                        // Save processed image to localStorage
-                        const saved = saveReferenceToLocalStorage(imageBase64, metadata);
-
-                        if (!saved) {
-                            showWarning('⚠️ Upload riuscito ma impossibile salvare nel localStorage locale');
+                        // Remove background if enabled
+                        if (removeBackgroundCheckbox.checked) {
+                            console.log('🔄 Rimozione sfondo abilitata');
+                            imageBase64 = await removeImageBackground(imageBase64);
+                        } else {
+                            console.log('ℹ️ Rimozione sfondo disabilitata');
+                            updateProcessingStatus('Preparazione completata', 'Sfondo non rimosso', 60);
                         }
 
-                        updateProcessingStatus('Completato!', 'Tutto pronto', 100);
+                        // Update preview with processed image
+                        const previewImg = document.getElementById('previewImage');
+                        if (previewImg) {
+                            previewImg.src = imageBase64;
+                        }
 
-                        // Show success banner
-                        const previewDiv = document.getElementById('referencePreview');
-                        const successBanner = `
+                        updateProcessingStatus('Caricamento sul server...', 'Invio dati...', 70);
+
+                        // Create FormData for server upload
+                        const formData = new FormData();
+
+                        // Convert base64 back to blob for upload
+                        const blob = await base64ToBlob(imageBase64);
+                        formData.append('file', blob, file.name);
+                        formData.append('limb_type', limbType);
+
+                        // Upload to server
+                        const response = await fetch('/api/upload_reference', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const result = await response.json();
+
+                        updateProcessingStatus('Salvataggio locale...', 'Quasi fatto...', 90);
+
+                        if (result.success) {
+                            console.log('✅ Upload completato:', result);
+
+                            const metadata = {
+                                limbType: result.limb_type || limbType,
+                                fileName: result.filename,
+                                uploadDate: new Date().toISOString(),
+                                session_id: result.session_id,
+                                fileSize: file.size,
+                                backgroundRemoved: removeBackgroundCheckbox.checked
+                            };
+
+                            // Save processed image to localStorage
+                            const saved = saveReferenceToLocalStorage(imageBase64, metadata);
+
+                            if (!saved) {
+                                showWarning('⚠️ Upload riuscito ma impossibile salvare nel localStorage locale');
+                            }
+
+                            updateProcessingStatus('Completato!', 'Tutto pronto', 100);
+
+                            // *** AGGIUNGI QUESTA CHIAMATA NUOVA ***
+                            // Mostra i risultati dei landmark se presenti
+                            if (result.landmarks || result.annotated_image) {
+                                displayLandmarkResults(result);
+                            }
+
+                            // Show success banner
+                            const previewDiv = document.getElementById('referencePreview');
+                            const successBanner = `
                             <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
                                 <div class="d-flex align-items-center">
                                     <i class="bi bi-check-circle-fill fs-3 me-3"></i>
@@ -761,88 +887,88 @@
                             </div>
                         `;
 
-                        previewDiv.insertAdjacentHTML('afterbegin', successBanner);
-                        showSuccess('✅ Immagine caricata con successo!');
+                            previewDiv.insertAdjacentHTML('afterbegin', successBanner);
+                            showSuccess('✅ Immagine caricata con successo!');
 
-                        // Scroll to preview
-                        previewDiv.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start'
-                        });
+                            // Scroll to preview
+                            previewDiv.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
+                            });
 
-                        // Add success styling
-                        const previewCard = previewDiv.querySelector('.card');
-                        if (previewCard) {
-                            previewCard.classList.remove('border-info');
-                            previewCard.classList.add('border-success');
-                            previewCard.style.borderWidth = '2px';
+                            // Add success styling
+                            const previewCard = previewDiv.querySelector('.card');
+                            if (previewCard) {
+                                previewCard.classList.remove('border-info');
+                                previewCard.classList.add('border-success');
+                                previewCard.style.borderWidth = '2px';
+                            }
+
+                            // Hide processing status after delay
+                            setTimeout(hideProcessingStatus, 2000);
+                        } else {
+                            console.error('❌ Upload fallito:', result.error);
+                            showError('❌ Errore: ' + result.error);
+                            hideProcessingStatus();
                         }
-
-                        // Hide processing status after delay
-                        setTimeout(hideProcessingStatus, 2000);
-                    } else {
-                        console.error('❌ Upload fallito:', result.error);
-                        showError('❌ Errore: ' + result.error);
+                    } catch (error) {
+                        console.error('❌ Errore durante il processo:', error);
+                        showError('❌ Errore: ' + error.message);
                         hideProcessingStatus();
+                    } finally {
+                        uploadBtn.disabled = false;
+                        uploadSpinner.classList.add('d-none');
                     }
-                } catch (error) {
-                    console.error('❌ Errore durante il processo:', error);
-                    showError('❌ Errore: ' + error.message);
+                });
+            }
+
+            // Clear reference function
+            window.clearAllReferenceData = function () {
+                if (confirm('Sei sicuro di voler cancellare tutti i dati di riferimento salvati?')) {
+                    clearOldReference();
+
+                    const previewDiv = document.getElementById('referencePreview');
+                    if (previewDiv) {
+                        previewDiv.style.display = 'none';
+                    }
+
+                    const uploadForm = document.getElementById('uploadForm');
+                    if (uploadForm) {
+                        uploadForm.reset();
+                    }
+
+                    const fileInfo = document.getElementById('fileInfo');
+                    if (fileInfo) {
+                        fileInfo.style.display = 'none';
+                    }
+
                     hideProcessingStatus();
-                } finally {
-                    uploadBtn.disabled = false;
-                    uploadSpinner.classList.add('d-none');
+                    showSuccess('🗑️ Tutti i dati di riferimento sono stati cancellati!');
                 }
+            };
+        }
+
+        // Helper function to convert file to base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
             });
         }
 
-        // Clear reference function
-        window.clearAllReferenceData = function () {
-            if (confirm('Sei sicuro di voler cancellare tutti i dati di riferimento salvati?')) {
-                clearOldReference();
+        // Helper function to convert base64 to blob
+        async function base64ToBlob(base64Data) {
+            const response = await fetch(base64Data);
+            return await response.blob();
+        }
 
-                const previewDiv = document.getElementById('referencePreview');
-                if (previewDiv) {
-                    previewDiv.style.display = 'none';
-                }
+        function updateImageInfo(file, limbType) {
+            const previewInfo = document.getElementById('previewInfo');
+            const fileSize = (file.size / 1024 / 1024).toFixed(2);
 
-                const uploadForm = document.getElementById('uploadForm');
-                if (uploadForm) {
-                    uploadForm.reset();
-                }
-
-                const fileInfo = document.getElementById('fileInfo');
-                if (fileInfo) {
-                    fileInfo.style.display = 'none';
-                }
-
-                hideProcessingStatus();
-                showSuccess('🗑️ Tutti i dati di riferimento sono stati cancellati!');
-            }
-        };
-    }
-
-    // Helper function to convert file to base64
-    function fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    // Helper function to convert base64 to blob
-    async function base64ToBlob(base64Data) {
-        const response = await fetch(base64Data);
-        return await response.blob();
-    }
-
-    function updateImageInfo(file, limbType) {
-        const previewInfo = document.getElementById('previewInfo');
-        const fileSize = (file.size / 1024 / 1024).toFixed(2);
-
-        previewInfo.innerHTML = `
+            previewInfo.innerHTML = `
             <div class="col-md-4 col-6">
                 <div class="preview-stats h-100">
                     <span class="stat-value text-primary">${file.name}</span>
@@ -862,141 +988,419 @@
                 </div>
             </div>
         `;
-    }
-
-    function initializeImageModal() {
-        const previewImage = document.getElementById('previewImage');
-        const modalElement = document.getElementById('imageModal');
-        const modalImage = document.getElementById('modalImage');
-
-        if (!modalElement) {
-            console.warn('⚠️ Modal elemento non trovato');
-            return;
         }
 
-        // Initialize Bootstrap modal
-        imageModalInstance = new bootstrap.Modal(modalElement);
+        function displayLandmarkResults(result) {
+            console.log('🎯 Mostrando risultati landmark detection...');
 
-        // Click on preview to open modal
-        if (previewImage) {
-            previewImage.addEventListener('click', function () {
-                if (this.src && this.src !== '') {
-                    modalImage.src = this.src;
-                    imageModalInstance.show();
-                    resetZoom();
-                    console.log('🔍 Modal aperto per zoom');
+            const landmarkDiv = document.getElementById('landmarkResults');
+            if (!landmarkDiv) {
+                console.warn('⚠️ Div landmarkResults non trovato');
+                return;
+            }
+
+            // Mostra il div
+            landmarkDiv.style.display = 'block';
+
+            // Popola le immagini
+            const originalImg = document.getElementById('originalImage');
+            const annotatedImg = document.getElementById('annotatedImage');
+
+            if (originalImg && result.reference_image) {
+                originalImg.src = result.reference_image.startsWith('data:')
+                    ? result.reference_image
+                    : `data:image/png;base64,${result.reference_image}`;
+            }
+
+            if (annotatedImg && result.annotated_image) {
+                annotatedImg.src = result.annotated_image.startsWith('data:')
+                    ? result.annotated_image
+                    : `data:image/png;base64,${result.annotated_image}`;
+
+                // Attiva automaticamente il tab annotato
+                const annotatedTab = document.getElementById('annotated-tab');
+                if (annotatedTab) {
+                    setTimeout(() => {
+                        annotatedTab.click();
+                    }, 500);
                 }
+            }
+
+            // Aggiungi zoom alle immagini
+            if (originalImg) {
+                originalImg.addEventListener('click', function () {
+                    openImageInModal(this.src);
+                });
+            }
+            if (annotatedImg) {
+                annotatedImg.addEventListener('click', function () {
+                    openImageInModal(this.src);
+                });
+            }
+
+            // Mostra info landmark
+            if (result.landmarks) {
+                displayLandmarkInfo(result.landmarks);
+            }
+
+            // Scroll to results
+            landmarkDiv.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
             });
         }
 
-        // Zoom controls
-        setupZoomControls();
-
-        // Touch zoom (pinch)
-        let initialDistance = 0;
-        let currentDistance = 0;
-
-        modalImage.addEventListener('touchstart', function (e) {
-            if (e.touches.length === 2) {
-                e.preventDefault();
-                initialDistance = getDistance(e.touches[0], e.touches[1]);
+        // Funzione per aprire immagine nel modal
+        function openImageInModal(imageSrc) {
+            const modalImage = document.getElementById('modalImage');
+            if (modalImage && imageModalInstance) {
+                modalImage.src = imageSrc;
+                imageModalInstance.show();
+                resetZoom();
             }
-        });
+        }
 
-        modalImage.addEventListener('touchmove', function (e) {
-            if (e.touches.length === 2) {
-                e.preventDefault();
-                currentDistance = getDistance(e.touches[0], e.touches[1]);
+        // Funzione per mostrare le informazioni sui landmark
+        function displayLandmarkInfo(landmarksData) {
+            const landmarkInfoDiv = document.getElementById('landmarkInfo');
+            const sensorPositionsDiv = document.getElementById('sensorPositions');
 
-                if (initialDistance > 0) {
-                    const scale = currentDistance / initialDistance;
-                    const newScale = Math.min(Math.max(currentScale * scale, minScale), maxScale);
-                    applyZoom(newScale);
-                    initialDistance = currentDistance;
+            if (!landmarkInfoDiv || !sensorPositionsDiv) return;
+
+            // Info generali
+            const totalLandmarks = landmarksData.total_landmarks || 0;
+            const detectionMethod = landmarksData.detection_method || 'Unknown';
+            const landmarks = landmarksData.landmarks || {};
+            const sensorPositions = landmarksData.sensor_positions || {};
+
+            // Card con statistiche landmark
+            let landmarkHTML = `
+        <div class="alert alert-info">
+            <div class="d-flex align-items-center mb-2">
+                <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+                <div>
+                    <h6 class="mb-0">Detection completato</h6>
+                    <small>Metodo: ${detectionMethod}</small>
+                </div>
+            </div>
+            <hr>
+            <div class="row text-center g-2">
+                <div class="col-6">
+                    <div class="p-2 bg-white rounded">
+                        <strong class="d-block text-primary fs-4">${totalLandmarks}</strong>
+                        <small class="text-muted">Landmark Rilevati</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-2 bg-white rounded">
+                        <strong class="d-block text-success fs-4">${Object.keys(sensorPositions).length}</strong>
+                        <small class="text-muted">Posizioni Sensori</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h6 class="mt-3 mb-2"><i class="bi bi-geo me-2"></i>Landmark Anatomici Rilevati</h6>
+        <div class="row g-2">
+    `;
+
+            // Card per ogni landmark
+            for (const [name, info] of Object.entries(landmarks)) {
+                const xy = info.xy;
+                const score = info.score || 0;
+
+                let colorClass = 'success';
+                let iconClass = 'check-circle-fill';
+                let statusText = 'Alta confidenza';
+
+                if (!xy) {
+                    colorClass = 'secondary';
+                    iconClass = 'x-circle';
+                    statusText = 'Non rilevato';
+                } else if (score < 0.4) {
+                    colorClass = 'danger';
+                    iconClass = 'exclamation-circle';
+                    statusText = 'Bassa confidenza';
+                } else if (score < 0.75) {
+                    colorClass = 'warning';
+                    iconClass = 'exclamation-triangle';
+                    statusText = 'Media confidenza';
                 }
+
+                landmarkHTML += `
+            <div class="col-md-6">
+                <div class="card border-${colorClass} h-100">
+                    <div class="card-body p-2">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-${iconClass} text-${colorClass} fs-4 me-2"></i>
+                            <div class="flex-grow-1">
+                                <strong class="d-block">${name.replace(/_/g, ' ')}</strong>
+                                <small class="text-muted">
+                                    ${xy ? `(${xy[0]}, ${xy[1]})` : 'N/A'} • Score: ${(score * 100).toFixed(0)}%
+                                </small>
+                            </div>
+                            <span class="badge bg-${colorClass}">${statusText}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
             }
-        });
 
-        modalImage.addEventListener('touchend', function (e) {
-            if (e.touches.length < 2) {
-                initialDistance = 0;
+            landmarkHTML += `</div>`;
+            landmarkInfoDiv.innerHTML = landmarkHTML;
+
+            // Card per posizioni sensori
+            if (Object.keys(sensorPositions).length > 0) {
+                // Popola anche la legenda dei sensori
+                populateSensorLegend(sensorPositions);
+
+                let sensorHTML = `
+            <h6 class="mt-3 mb-2"><i class="bi bi-bullseye me-2"></i>Posizioni Sensori Calcolate</h6>
+            <div class="row g-2">
+        `;
+
+                const muscleIcons = {
+                    'vasto_mediale': 'circle-fill text-primary',
+                    'retto_femorale': 'circle-fill text-danger',
+                    'gastrocnemio': 'circle-fill text-warning',
+                    'tibiale_anteriore': 'circle-fill text-success'
+                };
+
+                for (const [muscle, info] of Object.entries(sensorPositions)) {
+                    const position = info.position;
+                    const confidence = info.confidence || 0;
+                    const description = info.rule_description || 'N/A';
+                    const landmarksUsed = info.landmarks_used || [];
+
+                    const iconClass = muscleIcons[muscle] || 'circle-fill text-secondary';
+
+                    sensorHTML += `
+                <div class="col-md-6">
+                    <div class="card border-primary h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start mb-2">
+                                <i class="bi bi-${iconClass} fs-3 me-2"></i>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">${muscle.replace(/_/g, ' ').toUpperCase()}</h6>
+                                    <small class="text-muted d-block mb-2">${description}</small>
+
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="badge bg-secondary">
+                                            <i class="bi bi-geo-alt"></i> (${position[0]}, ${position[1]})
+                                        </span>
+                                        <span class="badge bg-info">
+                                            Confidenza: ${(confidence * 100).toFixed(0)}%
+                                        </span>
+                                    </div>
+
+                                    ${landmarksUsed.length > 0 ? `
+                                        <div class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-link-45deg"></i>
+                                                Basato su: ${landmarksUsed.join(' → ')}
+                                            </small>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar" role="progressbar"
+                                     style="width: ${confidence * 100}%"
+                                     aria-valuenow="${confidence * 100}"
+                                     aria-valuemin="0" aria-valuemax="100">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+                }
+
+                sensorHTML += `</div>`;
+                sensorPositionsDiv.innerHTML = sensorHTML;
+            } else {
+                sensorPositionsDiv.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Nessuna posizione sensore calcolata
+            </div>
+        `;
             }
-        });
-
-        function getDistance(touch1, touch2) {
-            const dx = touch1.clientX - touch2.clientX;
-            const dy = touch1.clientY - touch2.clientY;
-            return Math.sqrt(dx * dx + dy * dy);
         }
-    }
 
-    function setupZoomControls() {
-        // Desktop controls
-        const zoomIn = document.getElementById('zoomIn');
-        const zoomOut = document.getElementById('zoomOut');
-        const zoomReset = document.getElementById('zoomReset');
+        // Funzione per popolare la legenda dei sensori
+        function populateSensorLegend(sensorPositions) {
+            const sensorLegendDiv = document.getElementById('sensorLegend');
+            if (!sensorLegendDiv) return;
 
-        // Mobile controls
-        const zoomInMobile = document.getElementById('zoomInMobile');
-        const zoomOutMobile = document.getElementById('zoomOutMobile');
-        const zoomResetMobile = document.getElementById('zoomResetMobile');
+            const sensorColors = {
+                'vasto_mediale': {color: '#0d6efd', name: 'Blu'},         // Blu Bootstrap
+                'retto_femorale': {color: '#d63384', name: 'Magenta'},    // Magenta
+                'gastrocnemio': {color: '#fd7e14', name: 'Arancione'},    // Arancione
+                'tibiale_anteriore': {color: '#198754', name: 'Verde'}    // Verde Bootstrap
+            };
 
-        if (zoomIn) zoomIn.addEventListener('click', () => zoom(scaleStep));
-        if (zoomOut) zoomOut.addEventListener('click', () => zoom(-scaleStep));
-        if (zoomReset) zoomReset.addEventListener('click', resetZoom);
+            let legendHTML = '';
 
-        if (zoomInMobile) zoomInMobile.addEventListener('click', () => zoom(scaleStep));
-        if (zoomOutMobile) zoomOutMobile.addEventListener('click', () => zoom(-scaleStep));
-        if (zoomResetMobile) zoomResetMobile.addEventListener('click', resetZoom);
-    }
+            for (const [muscle, info] of Object.entries(sensorPositions)) {
+                const colorInfo = sensorColors[muscle] || {color: '#6c757d', name: 'Grigio'};
+                const muscleName = muscle.replace(/_/g, ' ').toUpperCase();
 
-    function zoom(delta) {
-        const newScale = Math.min(Math.max(currentScale + delta, minScale), maxScale);
-        applyZoom(newScale);
-    }
+                legendHTML += `
+            <div class="d-flex align-items-center">
+                <span class="me-2" style="
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    background-color: ${colorInfo.color};
+                    border: 3px solid white;
+                    box-shadow: 0 0 0 2px black;
+                    display: inline-block;
+                "></span>
+                <small><strong>${colorInfo.name}</strong> = ${muscleName}</small>
+            </div>
+        `;
+            }
 
-    function applyZoom(scale) {
-        currentScale = scale;
-        const modalImage = document.getElementById('modalImage');
-        if (modalImage) {
-            modalImage.style.transform = `scale(${currentScale})`;
-            modalImage.style.transition = 'transform 0.2s ease';
+            sensorLegendDiv.innerHTML = legendHTML;
         }
-    }
 
-    function resetZoom() {
-        currentScale = 1;
-        const modalImage = document.getElementById('modalImage');
-        if (modalImage) {
-            modalImage.style.transform = 'scale(1)';
+
+        function initializeImageModal() {
+            const previewImage = document.getElementById('previewImage');
+            const modalElement = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+
+            if (!modalElement) {
+                console.warn('⚠️ Modal elemento non trovato');
+                return;
+            }
+
+            // Initialize Bootstrap modal
+            imageModalInstance = new bootstrap.Modal(modalElement);
+
+            // Click on preview to open modal
+            if (previewImage) {
+                previewImage.addEventListener('click', function () {
+                    if (this.src && this.src !== '') {
+                        modalImage.src = this.src;
+                        imageModalInstance.show();
+                        resetZoom();
+                        console.log('🔍 Modal aperto per zoom');
+                    }
+                });
+            }
+
+            // Zoom controls
+            setupZoomControls();
+
+            // Touch zoom (pinch)
+            let initialDistance = 0;
+            let currentDistance = 0;
+
+            modalImage.addEventListener('touchstart', function (e) {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    initialDistance = getDistance(e.touches[0], e.touches[1]);
+                }
+            });
+
+            modalImage.addEventListener('touchmove', function (e) {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    currentDistance = getDistance(e.touches[0], e.touches[1]);
+
+                    if (initialDistance > 0) {
+                        const scale = currentDistance / initialDistance;
+                        const newScale = Math.min(Math.max(currentScale * scale, minScale), maxScale);
+                        applyZoom(newScale);
+                        initialDistance = currentDistance;
+                    }
+                }
+            });
+
+            modalImage.addEventListener('touchend', function (e) {
+                if (e.touches.length < 2) {
+                    initialDistance = 0;
+                }
+            });
+
+            function getDistance(touch1, touch2) {
+                const dx = touch1.clientX - touch2.clientX;
+                const dy = touch1.clientY - touch2.clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
         }
-    }
 
-    // Utility functions for notifications
-    function showSuccess(message) {
-        showNotification(message, 'success');
-    }
+        function setupZoomControls() {
+            // Desktop controls
+            const zoomIn = document.getElementById('zoomIn');
+            const zoomOut = document.getElementById('zoomOut');
+            const zoomReset = document.getElementById('zoomReset');
 
-    function showError(message) {
-        showNotification(message, 'danger');
-    }
+            // Mobile controls
+            const zoomInMobile = document.getElementById('zoomInMobile');
+            const zoomOutMobile = document.getElementById('zoomOutMobile');
+            const zoomResetMobile = document.getElementById('zoomResetMobile');
 
-    function showWarning(message) {
-        showNotification(message, 'warning');
-    }
+            if (zoomIn) zoomIn.addEventListener('click', () => zoom(scaleStep));
+            if (zoomOut) zoomOut.addEventListener('click', () => zoom(-scaleStep));
+            if (zoomReset) zoomReset.addEventListener('click', resetZoom);
 
-    function showNotification(message, type) {
-        const uploadResult = document.getElementById('uploadResult');
-        if (!uploadResult) return;
+            if (zoomInMobile) zoomInMobile.addEventListener('click', () => zoom(scaleStep));
+            if (zoomOutMobile) zoomOutMobile.addEventListener('click', () => zoom(-scaleStep));
+            if (zoomResetMobile) zoomResetMobile.addEventListener('click', resetZoom);
+        }
 
-        const iconMap = {
-            'success': 'check-circle',
-            'danger': 'x-circle',
-            'warning': 'exclamation-triangle',
-            'info': 'info-circle'
-        };
+        function zoom(delta) {
+            const newScale = Math.min(Math.max(currentScale + delta, minScale), maxScale);
+            applyZoom(newScale);
+        }
 
-        const alertHTML = `
+        function applyZoom(scale) {
+            currentScale = scale;
+            const modalImage = document.getElementById('modalImage');
+            if (modalImage) {
+                modalImage.style.transform = `scale(${currentScale})`;
+                modalImage.style.transition = 'transform 0.2s ease';
+            }
+        }
+
+        function resetZoom() {
+            currentScale = 1;
+            const modalImage = document.getElementById('modalImage');
+            if (modalImage) {
+                modalImage.style.transform = 'scale(1)';
+            }
+        }
+
+        // Utility functions for notifications
+        function showSuccess(message) {
+            showNotification(message, 'success');
+        }
+
+        function showError(message) {
+            showNotification(message, 'danger');
+        }
+
+        function showWarning(message) {
+            showNotification(message, 'warning');
+        }
+
+        function showNotification(message, type) {
+            const uploadResult = document.getElementById('uploadResult');
+            if (!uploadResult) return;
+
+            const iconMap = {
+                'success': 'check-circle',
+                'danger': 'x-circle',
+                'warning': 'exclamation-triangle',
+                'info': 'info-circle'
+            };
+
+            const alertHTML = `
             <div class="alert alert-${type} alert-dismissible fade show" role="alert">
                 <i class="bi bi-${iconMap[type] || 'info-circle'} me-2"></i>
                 ${message}
@@ -1004,18 +1408,18 @@
             </div>
         `;
 
-        uploadResult.innerHTML = alertHTML;
+            uploadResult.innerHTML = alertHTML;
 
-        // Auto-dismiss after 5 seconds
-        setTimeout(() => {
-            const alert = uploadResult.querySelector('.alert');
-            if (alert) {
-                const bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
-            }
-        }, 5000);
-    }
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                const alert = uploadResult.querySelector('.alert');
+                if (alert) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
 
-    console.log('✅ Script upload.html con rimozione background caricato completamente');
-</script>
+        console.log('✅ Script upload.html con rimozione background caricato completamente');
+    </script>
 {% endblock %}

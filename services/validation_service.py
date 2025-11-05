@@ -2,16 +2,39 @@ import cv2
 import base64
 import numpy as np
 import os
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from skimage.metrics import structural_similarity as ssim
+
+# Import del detector SENIAM
+try:
+    from models.limb_detector import SENIAMLimbDetector
+
+    DETECTOR_AVAILABLE = True
+except ImportError:
+    print("⚠️ SENIAMLimbDetector non disponibile")
+    DETECTOR_AVAILABLE = False
 
 
 class ValidationService:
     def __init__(self):
         self.sessions: Dict[str, Dict] = {}
+        self.detector = None
+
+        # Inizializza il detector se disponibile
+        if DETECTOR_AVAILABLE:
+            try:
+                self.detector = SENIAMLimbDetector(
+                    limb_type='leg',
+                    model_name='lower_limb',
+                    target_input_size=(512, 512)
+                )
+                print("✅ SENIAMLimbDetector inizializzato")
+            except Exception as e:
+                print(f"⚠️ Errore inizializzazione detector: {e}")
+                self.detector = None
 
     def handle_reference_upload(self, request) -> Dict:
-        """Handle reference image upload"""
+        """Handle reference image upload with landmark detection"""
         try:
             if 'file' not in request.files:
                 return {'success': False, 'error': 'Nessun file fornito'}
@@ -36,28 +59,72 @@ class ValidationService:
 
             print(f"[UPLOAD] Image loaded. Size: {image.shape}")
 
-            # Salva immagine
+            # Processa con landmark detection se disponibile e tipo è 'leg'
+            landmarks_data = None
+            annotated_image = None
+
+            if limb_type == 'leg' and self.detector is not None:
+                print("[DETECTION] Inizio rilevamento landmark SENIAM...")
+                try:
+                    landmarks_data = self._detect_and_annotate(image)
+
+                    if landmarks_data and landmarks_data.get('landmarks'):
+                        # CORREZIONE: Passa anche sensor_positions
+                        annotated_image = self._draw_landmarks_on_image(
+                            image.copy(),
+                            landmarks_data['landmarks'],
+                            landmarks_data.get('sensor_positions', {})  # ← AGGIUNTO
+                        )
+                        print(f"[DETECTION] ✅ Rilevati {len(landmarks_data['landmarks'])} landmark")
+                        print(
+                            f"[DETECTION] ✅ Calcolate {len(landmarks_data.get('sensor_positions', {}))} posizioni sensori")
+                    else:
+                        print("[DETECTION] ⚠️ Nessun landmark rilevato")
+
+                except Exception as e:
+                    print(f"[DETECTION] ❌ Errore detection: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            # Salva immagine originale
             temp_filename = f"{session_id}_{limb_type}_reference.png"
             upload_folder = 'uploads'
-
             os.makedirs(upload_folder, exist_ok=True)
             filepath = os.path.join(upload_folder, temp_filename)
-
             cv2.imwrite(filepath, image)
             print(f"[UPLOAD] Image saved to: {filepath}")
 
+            # Salva anche immagine annotata se disponibile
+            annotated_filepath = None
+            if annotated_image is not None:
+                annotated_filename = f"{session_id}_{limb_type}_annotated.png"
+                annotated_filepath = os.path.join(upload_folder, annotated_filename)
+                cv2.imwrite(annotated_filepath, annotated_image)
+                print(f"[UPLOAD] Annotated image saved to: {annotated_filepath}")
+
             # Store session data
-            self.sessions[session_id] = {
+            session_data = {
                 'limb_type': limb_type,
                 'reference_image': filepath,
                 'upload_time': str(np.datetime64('now'))
             }
 
-            # Encode to base64
+            if landmarks_data:
+                session_data['landmarks'] = landmarks_data
+                session_data['annotated_image'] = annotated_filepath
+
+            self.sessions[session_id] = session_data
+
+            # Encode images to base64
             _, buffer = cv2.imencode('.png', image)
             preview_base64 = base64.b64encode(buffer).decode()
 
-            return {
+            annotated_base64 = None
+            if annotated_image is not None:
+                _, ann_buffer = cv2.imencode('.png', annotated_image)
+                annotated_base64 = base64.b64encode(ann_buffer).decode()
+
+            response = {
                 'success': True,
                 'message': 'Immagine di riferimento caricata con successo',
                 'session_id': session_id,
@@ -66,11 +133,270 @@ class ValidationService:
                 'limb_type': limb_type
             }
 
+            # Aggiungi dati landmark se disponibili
+            if landmarks_data:
+                response['landmarks'] = landmarks_data
+                if annotated_base64:
+                    response['annotated_image'] = annotated_base64
+
+            return response
+
         except Exception as e:
             print(f"[ERROR] Upload error: {e}")
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': f'Errore durante il caricamento: {str(e)}'}
+
+    def _detect_and_annotate(self, image: np.ndarray) -> Optional[Dict]:
+        """Rileva landmark usando SENIAMLimbDetector"""
+        if self.detector is None:
+            return None
+
+        try:
+            # Rileva landmark
+            landmarks = self.detector.detect_landmarks(
+                image,
+                score_threshold=0.2
+            )
+
+            if not landmarks:
+                return None
+
+            # Conta landmark validi
+            valid_landmarks = {
+                name: info for name, info in landmarks.items()
+                if info.get('xy') is not None
+            }
+
+            if not valid_landmarks:
+                return None
+
+            # Calcola posizioni sensori per muscoli principali
+            sensor_positions = {}
+            muscles_to_detect = ['vasto_mediale', 'retto_femorale', 'gastrocnemio', 'tibiale_anteriore']
+
+            for muscle in muscles_to_detect:
+                try:
+                    sensor_pos = self.detector.calculate_sensor_position(
+                        landmarks,
+                        muscle,
+                        min_score=0.2
+                    )
+                    sensor_positions[muscle] = sensor_pos
+                    print(f"   ✓ Sensore {muscle}: posizione {sensor_pos['position']}")
+                except Exception as e:
+                    print(f"   ⚠️ Impossibile calcolare posizione per {muscle}: {e}")
+                    continue
+
+            return {
+                'landmarks': landmarks,
+                'sensor_positions': sensor_positions,
+                'total_landmarks': len(valid_landmarks),
+                'detection_method': 'SENIAMLimbDetector'
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Errore in _detect_and_annotate: {e}")
+            return None
+
+    def _draw_landmarks_on_image(self, image: np.ndarray, landmarks: Dict,
+                                 sensor_positions: Dict = None) -> np.ndarray:
+        """
+        Disegna i landmark e le posizioni dei sensori sull'immagine
+
+        Args:
+            image: immagine da annotare
+            landmarks: Dict con formato {'name': {'xy': (x,y), 'score': float}}
+            sensor_positions: Dict con formato {'muscle_name': {'position': (x,y), 'confidence': float, ...}}
+        """
+        result = image.copy()
+        h, w = image.shape[:2]
+
+        # 1. DISEGNA I LANDMARK ANATOMICI
+        print(f"[DRAW] Disegno {len(landmarks)} landmark anatomici...")
+        for name, info in landmarks.items():
+            xy = info.get('xy')
+            score = info.get('score', 0.0)
+
+            if xy is None:
+                print(f"   ⚠️ Landmark '{name}' non ha coordinate valide")
+                continue
+
+            x, y = xy
+            print(f"   ✓ Disegno landmark '{name}' a ({x}, {y}) con score {score:.2f}")
+
+            # Colore basato sulla confidenza
+            if score >= 0.75:
+                color = (0, 255, 0)  # Verde - alta confidenza
+                label_color = "HIGH"
+            elif score >= 0.4:
+                color = (0, 255, 255)  # Giallo - media confidenza
+                label_color = "MED"
+            else:
+                color = (0, 0, 255)  # Rosso - bassa confidenza
+                label_color = "LOW"
+
+            # Disegna cerchio per il landmark
+            cv2.circle(result, (x, y), 8, color, -1)  # Cerchio pieno
+            cv2.circle(result, (x, y), 10, (255, 255, 255), 2)  # Bordo bianco
+
+            # Prepara etichetta
+            label = f"{name}"
+            label_score = f"{score:.2f}"
+
+            # Background per il testo
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.5
+            thickness = 2
+            (text_width, text_height), baseline = cv2.getTextSize(
+                label, font, font_scale, thickness
+            )
+
+            # Posizione testo (sopra il punto)
+            text_x = x + 12
+            text_y = y - 10
+
+            # Rettangolo background
+            cv2.rectangle(
+                result,
+                (text_x - 2, text_y - text_height - 2),
+                (text_x + text_width + 2, text_y + baseline + 2),
+                (0, 0, 0),
+                -1
+            )
+
+            # Testo landmark name
+            cv2.putText(
+                result, label, (text_x, text_y),
+                font, font_scale, color, thickness
+            )
+
+            # Score sotto il nome
+            cv2.putText(
+                result, label_score, (text_x, text_y + 15),
+                font, 0.4, (255, 255, 255), 1
+            )
+
+        # 2. DISEGNA LE POSIZIONI DEI SENSORI
+        if sensor_positions:
+            print(f"[DRAW] Disegno {len(sensor_positions)} posizioni sensori...")
+
+            # Colori diversi per muscoli diversi
+            sensor_colors = {
+                'vasto_mediale': (255, 0, 0),  # Blu
+                'retto_femorale': (255, 0, 255),  # Magenta
+                'gastrocnemio': (0, 165, 255),  # Arancione
+                'tibiale_anteriore': (0, 255, 0)  # Verde
+            }
+
+            for muscle_name, sensor_info in sensor_positions.items():
+                position = sensor_info.get('position')
+                confidence = sensor_info.get('confidence', 0.0)
+
+                if position is None:
+                    print(f"   ⚠️ Sensore '{muscle_name}' non ha posizione valida")
+                    continue
+
+                x, y = position
+                color = sensor_colors.get(muscle_name, (128, 128, 128))
+
+                print(f"   ✓ Disegno sensore '{muscle_name}' a ({x}, {y}) con confidenza {confidence:.2f}")
+
+                # Disegna cerchio grande per il sensore
+                cv2.circle(result, (x, y), 15, color, -1)  # Cerchio pieno colorato
+                cv2.circle(result, (x, y), 18, (255, 255, 255), 3)  # Bordo bianco spesso
+                cv2.circle(result, (x, y), 21, (0, 0, 0), 2)  # Bordo nero esterno
+
+                # Croce centrale per precisione
+                cross_size = 8
+                cv2.line(result, (x - cross_size, y), (x + cross_size, y), (255, 255, 255), 2)
+                cv2.line(result, (x, y - cross_size), (x, y + cross_size), (255, 255, 255), 2)
+
+                # Etichetta sensore
+                label = f"SENSORE: {muscle_name}"
+                conf_label = f"Conf: {confidence:.2f}"
+
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.6
+                thickness = 2
+
+                # Calcola dimensioni testo
+                (text_width, text_height), baseline = cv2.getTextSize(
+                    label, font, font_scale, thickness
+                )
+
+                # Posizione testo (a destra del sensore)
+                text_x = x + 25
+                text_y = y
+
+                # Background nero per leggibilità
+                cv2.rectangle(
+                    result,
+                    (text_x - 3, text_y - text_height - 3),
+                    (text_x + text_width + 3, text_y + 20),
+                    (0, 0, 0),
+                    -1
+                )
+
+                # Bordo colorato
+                cv2.rectangle(
+                    result,
+                    (text_x - 3, text_y - text_height - 3),
+                    (text_x + text_width + 3, text_y + 20),
+                    color,
+                    2
+                )
+
+                # Testo nome muscolo (bianco)
+                cv2.putText(
+                    result, label, (text_x, text_y),
+                    font, font_scale, (255, 255, 255), thickness
+                )
+
+                # Testo confidenza (colore del sensore)
+                cv2.putText(
+                    result, conf_label, (text_x, text_y + 15),
+                    font, 0.45, color, 1
+                )
+
+                # Linea che collega i landmark usati al sensore
+                if 'landmarks_used' in sensor_info:
+                    landmarks_used = sensor_info['landmarks_used']
+                    if len(landmarks_used) >= 2:
+                        lm_start_name = landmarks_used[0]
+                        lm_end_name = landmarks_used[1]
+
+                        lm_start = landmarks.get(lm_start_name, {}).get('xy')
+                        lm_end = landmarks.get(lm_end_name, {}).get('xy')
+
+                        if lm_start and lm_end:
+                            # Linea tratteggiata tra i landmark
+                            self._draw_dashed_line(result, lm_start, lm_end, color, 2)
+
+        print(f"[DRAW] ✅ Annotazione completata")
+        return result
+
+    def _draw_dashed_line(self, image: np.ndarray, pt1: Tuple[int, int],
+                          pt2: Tuple[int, int], color: Tuple[int, int, int],
+                          thickness: int = 1, dash_length: int = 10):
+        """Disegna una linea tratteggiata tra due punti"""
+        x1, y1 = pt1
+        x2, y2 = pt2
+
+        dist = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        dashes = int(dist / dash_length)
+
+        for i in range(dashes):
+            if i % 2 == 0:  # Disegna solo i segmenti pari
+                start = (
+                    int(x1 + (x2 - x1) * i / dashes),
+                    int(y1 + (y2 - y1) * i / dashes)
+                )
+                end = (
+                    int(x1 + (x2 - x1) * (i + 1) / dashes),
+                    int(y1 + (y2 - y1) * (i + 1) / dashes)
+                )
+                cv2.line(image, start, end, color, thickness, cv2.LINE_AA)
 
     def preprocess_for_comparison(self, image: np.ndarray, target_size: Tuple[int, int] = (640, 480)) -> np.ndarray:
         """
@@ -304,13 +630,19 @@ class ValidationService:
 
         session_data = self.sessions[session_id]
 
-        return {
+        response = {
             'success': True,
             'session_id': session_id,
             'limb_type': session_data['limb_type'],
             'reference_loaded': True,
             'upload_time': session_data['upload_time']
         }
+
+        # Aggiungi dati landmark se presenti
+        if 'landmarks' in session_data:
+            response['landmarks'] = session_data['landmarks']
+
+        return response
 
     def _decode_base64_image(self, base64_string):
         """Decodifica un'immagine base64 in formato OpenCV"""
