@@ -1,4 +1,5 @@
 "use strict";
+
 class SensorValidationApp {
     constructor() {
         this.isValidating = false;
@@ -38,7 +39,8 @@ class SensorValidationApp {
             if (!element) {
                 console.warn(`Elemento DOM non trovato: ${name}`);
             } else {
-                console.log(`✓ Elemento trovato: ${name}`);
+                // Rimosso log per pulizia console
+                // console.log(`✓ Elemento trovato: ${name}`);
             }
         }
     }
@@ -51,69 +53,49 @@ class SensorValidationApp {
     async checkReferenceStatus() {
         try {
             console.log('Checking reference status...');
-            const localReference = localStorage.getItem('referenceImage');
+
+            // --- MODIFICA CORRETTIVA ---
+            // Le chiavi corrette che validation.html si aspetta sono:
+            // 'validationOverlayImage' (per il canvas)
+            // 'cleanReferenceImage' (per il backend)
+            // 'referenceMetadata'
+            const localOverlay = localStorage.getItem('validationOverlayImage');
             const localMetadata = localStorage.getItem('referenceMetadata');
 
-            if (localReference && localMetadata) {
-                const metadata = JSON.parse(localMetadata);
-                console.log('✅ Riferimento trovato nel localStorage');
+            // C'è un'incoerenza. Inizializziamo this.referenceLoaded
+            // qui, ma validation.html ha la sua logica per
+            // caricare i dati. Ci affidiamo alla logica di validation.html
+            // e qui facciamo solo un controllo superficiale.
+
+            if (localOverlay && localMetadata) {
+                console.log('✅ Riferimento (overlay/metadata) trovato nel localStorage');
                 this.referenceLoaded = true;
-                this.showStatus('Riferimento caricato con successo! Pronto per la validazione.', 'success');
 
-                if (this.referencePreview) {
-                    this.displayReferencePreview(localReference, metadata);
-                }
+                // NOTA: 'validation.html' ha la sua logica 'loadReferenceFromStorage'
+                // che è più completa e gestisce l'UI.
+                // Questa funzione in main.js è quasi ridondante
+                // se non per il this.referenceLoaded.
+                // Evitiamo di duplicare la logica di 'displayReferencePreview'
+                // che è già gestita meglio in validation.html
 
-                if (this.startButton) {
-                    this.startButton.disabled = false;
-                }
-                return true;
+            } else {
+                console.log('❌ Nessun riferimento trovato nel localStorage (overlay o metadata mancanti)');
+                this.referenceLoaded = false;
             }
-
-            console.log('❌ Nessun riferimento trovato nel localStorage');
-            this.referenceLoaded = false;
-            this.showReferenceRequiredMessage();
-            return false;
 
         } catch (error) {
             console.warn('Errore nel verificare lo stato del riferimento:', error);
             this.referenceLoaded = false;
-            this.showReferenceRequiredMessage();
             return false;
         }
     }
 
     showReferenceRequiredMessage() {
-        this.showStatus('Carica un\'immagine di riferimento per iniziare', 'warning');
-
-        if (this.referencePreview) {
-            this.referencePreview.innerHTML = `
-                <div class="card-body text-center">
-                    <i class="bi bi-exclamation-triangle fs-1 text-warning mb-3"></i>
-                    <h5>Nessun Riferimento Caricato</h5>
-                    <p class="text-muted">Per avviare la validazione, devi prima caricare un'immagine di riferimento.</p>
-                    <a href="upload.html" class="btn btn-primary mt-2">
-                        <i class="bi bi-upload"></i> Carica Riferimento
-                    </a>
-                </div>
-            `;
-        }
+        // Questa funzione è gestita da validation.html
     }
 
     displayReferencePreview(imageData, metadata) {
-        if (!this.referencePreview) return;
-
-        const imgSrc = imageData.startsWith('data:') ? imageData : `data:image/jpeg;base64,${imageData}`;
-
-        this.referencePreview.innerHTML = `
-            <div class="card-body">
-                <img src="${imgSrc}" alt="Reference preview" class="img-fluid rounded mb-2" 
-                     style="max-height: 200px;">
-                <p class="mb-1"><strong>Tipo:</strong> ${metadata.limbType === 'arm' ? 'Braccio' : 'Gamba'}</p>
-                ${metadata.points_detected ? `<p class="mb-1"><small class="text-muted">Punti anatomici: ${metadata.points_detected}</small></p>` : ''}
-                ${metadata.uploadDate ? `<p class="mb-0"><small class="text-muted">Caricato: ${new Date(metadata.uploadDate).toLocaleString()}</small></p>` : ''}
-            </div>
-        `;
+        // Questa funzione è gestita da validation.html
     }
 
     generateSessionId() {
@@ -163,7 +145,7 @@ class SensorValidationApp {
         width = Math.floor(width / 2) * 2;
         height = Math.floor(height / 2) * 2;
 
-        return { width, height };
+        return {width, height};
     }
 
     /**
@@ -192,7 +174,11 @@ class SensorValidationApp {
         let referenceAspect = null;
         if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
             referenceAspect = referenceImage.naturalWidth / referenceImage.naturalHeight;
+            console.log(`Using reference aspect ratio: ${referenceAspect}`);
+        } else {
+            console.log('No reference image for aspect ratio, using container.');
         }
+
 
         // Calcola risoluzione ottimale
         const optimalRes = this.calculateOptimalResolution(
@@ -213,10 +199,10 @@ class SensorValidationApp {
         if (preferredDeviceId) {
             tryConstraintsList.push({
                 video: {
-                    deviceId: { exact: preferredDeviceId },
-                    width: { ideal: optimalRes.width },
-                    height: { ideal: optimalRes.height },
-                    aspectRatio: { ideal: referenceAspect || (optimalRes.width / optimalRes.height) }
+                    deviceId: {exact: preferredDeviceId},
+                    width: {ideal: optimalRes.width},
+                    height: {ideal: optimalRes.height},
+                    aspectRatio: {ideal: referenceAspect || (optimalRes.width / optimalRes.height)}
                 }
             });
         }
@@ -225,9 +211,9 @@ class SensorValidationApp {
         if (!isSafari) {
             tryConstraintsList.push({
                 video: {
-                    width: { ideal: optimalRes.width },
-                    height: { ideal: optimalRes.height },
-                    aspectRatio: { ideal: referenceAspect || (optimalRes.width / optimalRes.height) },
+                    width: {ideal: optimalRes.width},
+                    height: {ideal: optimalRes.height},
+                    aspectRatio: {ideal: referenceAspect || (optimalRes.width / optimalRes.height)},
                     facingMode: 'user'
                 }
             });
@@ -235,15 +221,15 @@ class SensorValidationApp {
             // 3. Constraint con risoluzione min/max
             tryConstraintsList.push({
                 video: {
-                    width: { min: 640, ideal: optimalRes.width, max: 1920 },
-                    height: { min: 480, ideal: optimalRes.height, max: 1080 },
+                    width: {min: 640, ideal: optimalRes.width, max: 1920},
+                    height: {min: 480, ideal: optimalRes.height, max: 1080},
                     facingMode: 'user'
                 }
             });
         }
 
         // 4. Fallback base per Safari
-        tryConstraintsList.push({ video: true });
+        tryConstraintsList.push({video: true});
 
         // Enumera dispositivi disponibili
         try {
@@ -255,9 +241,9 @@ class SensorValidationApp {
                 // Prova con la prima camera disponibile
                 tryConstraintsList.unshift({
                     video: {
-                        deviceId: { exact: cameras[0].deviceId },
-                        width: { ideal: optimalRes.width },
-                        height: { ideal: optimalRes.height }
+                        deviceId: {exact: cameras[0].deviceId},
+                        width: {ideal: optimalRes.width},
+                        height: {ideal: optimalRes.height}
                     }
                 });
             }
@@ -370,27 +356,35 @@ class SensorValidationApp {
     }
 }
 
-// Inizializzazione globale
-document.addEventListener('DOMContentLoaded', () => {
-    try {
-        console.log('🚀 Inizializzazione SensorValidationApp...');
-        const app = new SensorValidationApp();
-        window.sensorApp = app;
+// --- MODIFICA 2: Inizializzazione globale ---
+// Rimosso il wrapper 'DOMContentLoaded' per eseguire questo
+// script immediatamente non appena viene caricato.
+try {
+    console.log('🚀 Inizializzazione SensorValidationApp (immediata)...');
+    const app = new SensorValidationApp();
+    window.sensorApp = app;
 
-        // Inizializzazione camera automatica dopo un breve delay
-        setTimeout(() => {
-            console.log('Tentativo di inizializzazione camera...');
+    // Inizializzazione camera automatica dopo un breve delay
+    setTimeout(() => {
+        console.log('Tentativo di inizializzazione camera...');
 
-            // Ottieni riferimento se disponibile per calcolare risoluzione ottimale
-            const storedReference = localStorage.getItem('referenceImage');
-            let referenceImage = null;
+        // --- MODIFICA 2b: Correggiamo la chiave del localStorage ---
+        // 'validation.html' salva l'overlay (per l'aspect ratio)
+        // con la chiave 'validationOverlayImage'.
+        const storedReference = localStorage.getItem('validationOverlayImage');
+        let referenceImage = null;
 
-            if (storedReference) {
-                referenceImage = new Image();
-                referenceImage.src = storedReference;
-            }
+        if (storedReference) {
+            referenceImage = new Image();
+            referenceImage.src = storedReference;
+            console.log('Trovata immagine "validationOverlayImage" per calcolo aspect ratio');
+        } else {
+            console.warn('Nessuna immagine "validationOverlayImage" trovata, uso aspect ratio di default');
+        }
 
-            app.initializeCameraWithAdaptiveResolution(null, referenceImage).then(success => {
+        // Aspetta che l'immagine (se trovata) sia caricata per leggerne le dimensioni
+        const initializeCam = (img) => {
+            app.initializeCameraWithAdaptiveResolution(null, img).then(success => {
                 if (success) {
                     console.log('✅ Camera initialized successfully');
                 } else {
@@ -401,14 +395,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('❌ Camera initialization error:', error);
                 app.showStatus('Errore inizializzazione camera', 'error');
             });
-        }, 500);
+        };
 
-    } catch (error) {
-        console.error('❌ Failed to initialize app:', error);
-        const statusElement = document.getElementById('statusMessage');
-        if (statusElement) {
-            statusElement.textContent = 'Errore di inizializzazione dell\'applicazione';
-            statusElement.className = 'ms-3 text-error';
+        if (referenceImage) {
+            referenceImage.onload = () => initializeCam(referenceImage);
+            referenceImage.onerror = () => initializeCam(null); // Fallback
+        } else {
+            initializeCam(null); // Avvia subito senza immagine
         }
+
+    }, 500);
+
+} catch (error) {
+    console.error('❌ Failed to initialize app:', error);
+    const statusElement = document.getElementById('statusMessage');
+    if (statusElement) {
+        statusElement.textContent = 'Errore di inizializzazione dell\'applicazione';
+        statusElement.className = 'ms-3 text-error';
     }
-});
+}

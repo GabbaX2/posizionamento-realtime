@@ -9,6 +9,5 @@ __all__ = [
     'calculate_distance',
     'calculate_angle',
     'rotate_point',
-    'generate_frames',
-    'draw_validation_results'
+    'generate_frames'
 ]

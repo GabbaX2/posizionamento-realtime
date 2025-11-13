@@ -6,6 +6,8 @@ import numpy as np
 import cv2
 import logging
 
+# Assumendo che config.py, image_processing.py e background_removal.py
+# esistano nelle cartelle corrette
 from config import Config
 from services.validation_service import ValidationService
 from utils.image_processing import encode_image_to_base64
@@ -24,39 +26,6 @@ app.config.from_object(Config)
 validation_service = ValidationService()
 
 
-def check_reference_exists(session_id):
-    """Verifica se esiste un riferimento per la sessione specificata"""
-    try:
-        reference_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{session_id}_reference.json")
-
-        if os.path.exists(reference_path):
-            with open(reference_path, 'r') as f:
-                reference_data = json.load(f)
-
-            return {
-                'success': True,
-                'has_reference': True,
-                'preview_image': reference_data.get('preview_image'),
-                'limb_type': reference_data.get('limb_type'),
-                'sensor_count': len(reference_data.get('sensor_positions', [])),
-                'message': 'Riferimento trovato'
-            }
-        else:
-            return {
-                'success': True,
-                'has_reference': False,
-                'message': 'Nessun riferimento trovato'
-            }
-
-    except Exception as e:
-        logger.error(f"Errore nel verificare il riferimento: {str(e)}")
-        return {
-            'success': False,
-            'has_reference': False,
-            'error': str(e)
-        }
-
-
 # ============================================================================
 # ROUTES - PAGINE HTML
 # ============================================================================
@@ -68,6 +37,7 @@ def index():
 
 @app.route('/upload')
 def upload_page():
+    # Questo caricherà il file 'upload.html' che hai fornito
     return render_template('upload.html')
 
 
@@ -83,29 +53,21 @@ def validation_page():
 @app.route('/api/upload_reference', methods=['POST'])
 def api_upload_reference():
     """
-    Endpoint per caricare un'immagine di riferimento CON elaborazione landmark
-    Usa ValidationService.handle_reference_upload che include:
-    - Salvataggio immagine
-    - Detection landmark (se limb_type='leg')
-    - Annotazione immagine
+    Endpoint per caricare un'immagine di riferimento CON elaborazione
+    Contorni e Sensori.
+    Questo endpoint ora è l'unico responsabile della creazione
+    di TUTTE le immagini (pulita, annotata, overlay).
     """
     try:
-        logger.info("[ROUTE] /api/upload_reference called - WITH LANDMARK DETECTION")
+        logger.info("[ROUTE] /api/upload_reference called - CON RILEVAMENTO CONTORNI/SENSORI")
 
         # Usa il metodo del ValidationService che abbiamo modificato
         result = validation_service.handle_reference_upload(request)
 
         if result.get('success'):
             logger.info("✅ Upload e processing completato con successo")
-
-            # Log landmark info se presenti
-            if 'landmarks' in result:
-                landmarks_info = result['landmarks']
-                logger.info(f"   📍 Landmark rilevati: {landmarks_info.get('total_landmarks', 0)}")
-                logger.info(f"   🔬 Metodo: {landmarks_info.get('detection_method', 'N/A')}")
-
-                if 'sensor_positions' in landmarks_info:
-                    logger.info(f"   💉 Posizioni sensori calcolate: {len(landmarks_info['sensor_positions'])}")
+            sensors_count = result.get('sensors_found', 0)
+            logger.info(f"   🔬 Sensori rilevati: {sensors_count}")
         else:
             logger.warning(f"⚠️ Upload fallito: {result.get('error', 'Unknown error')}")
 
@@ -177,15 +139,20 @@ def api_remove_background():
         return jsonify({'success': False, 'error': f'Errore server: {str(e)}'}), 500
 
 
+# ============================================================================
+# NOTA: L'ENDPOINT /api/extract_drawing_overlay È STATO RIMOSSO
+#       PERCHÉ NON PIÙ NECESSARIO.
+# ============================================================================
+
 
 @app.route('/api/validate_frame', methods=['POST'])
 def api_validate_frame():
     """
     Endpoint per validare un frame dalla webcam
-    Riceve il frame corrente e l'immagine di riferimento in base64
     """
     try:
-        logger.info("[ROUTE] /api/validate_frame called")
+        # Nota: Non logghiamo più qui per evitare di intasare i log
+        # logger.info("[ROUTE] /api/validate_frame called")
         result = validation_service.validate_current_frame(request)
         return jsonify(result)
     except Exception as e:
@@ -220,20 +187,34 @@ def api_get_validation_status():
 def api_check_reference():
     """
     Verifica se esiste un riferimento per la sessione corrente
+    usando il metodo 'get_validation_status' del service.
     """
     try:
         data = request.get_json()
         session_id = data.get('session_id', 'default')
+        logger.info(f"[ROUTE] /api/check_reference (-> get_validation_status) for session: {session_id}")
 
-        # Verifica l'esistenza del riferimento
-        result = check_reference_exists(session_id)
-        return jsonify(result)
+        # Chiama il metodo del service che già fa questo controllo
+        status_result = validation_service.get_validation_status(session_id)
+
+        # Mappiamo il risultato del servizio nel formato atteso dal frontend
+        has_ref = status_result.get('reference_loaded', False)
+
+        response = {
+            'success': status_result.get('success', True),
+            'has_reference': has_ref,
+            'sensor_count': status_result.get('sensors_found', 0) if has_ref else 0,
+            'message': 'Riferimento trovato' if has_ref else 'Nessun riferimento trovato',
+        }
+
+        return jsonify(response)
 
     except Exception as e:
         logger.error(f"[ERROR] Route /api/check_reference failed: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'has_reference': False
         }), 500
 
 
@@ -295,7 +276,7 @@ if __name__ == '__main__':
     print(f"   • Upload folder: {app.config.get('UPLOAD_FOLDER', 'uploads')}")
 
     print("\n🌐 API Endpoints disponibili:")
-    print("   • POST /api/upload_reference        - Carica immagine riferimento")
+    print("   • POST /api/upload_reference        - Carica e analizza immagine")
     print("   • POST /api/remove_background       - Rimuove sfondo da immagine")
     print("   • POST /api/validate_frame          - Valida frame corrente")
     print("   • GET  /api/get_validation_status   - Stato della validazione")
@@ -309,4 +290,4 @@ if __name__ == '__main__':
     print("Premi CTRL+C per fermare il server")
     print("=" * 50 + "\n")
 
-    app.run(debug=True, host='127.0.0.0', port=port)
+    app.run(debug=True, host='127.0.0.1', port=port)
