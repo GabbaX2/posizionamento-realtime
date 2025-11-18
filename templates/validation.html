@@ -136,16 +136,15 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
-
     <script>
-        // [MODIFICA] Variabili rinominate per chiarezza
-        let cleanReferenceImage = null; // Immagine PULITA da inviare al backend per confronto SSIM
-        let validationOverlayImage = null; // Immagine DISEGNO da mostrare sul canvas
+        let cleanReferenceImage = null;
+        let validationOverlayImage = null;
         let referenceMetadata = null;
         let overlayOpacity = 0.5;
         let isValidating = false;
         let animationFrameId = null;
         let validationIntervalId = null;
+        let currentAccuracy = 0; // NUOVA VARIABILE
 
         const video = document.getElementById('videoElement');
         const canvas = document.getElementById('overlayCanvas');
@@ -163,23 +162,18 @@
 
         const MAX_VIDEO_HEIGHT = 500;
 
-        // Adatta il riquadro video al rapporto d'aspetto dell'immagine di riferimento
         function adjustContainerToReference(imgWidth, imgHeight) {
             if (!videoContainer || !video) return;
-
             const aspect = imgHeight / imgWidth;
             const parentWidth = videoContainer.parentElement.clientWidth;
-
             let desiredHeight = Math.round(parentWidth * aspect);
             if (desiredHeight > MAX_VIDEO_HEIGHT) desiredHeight = MAX_VIDEO_HEIGHT;
 
             videoContainer.style.width = parentWidth + 'px';
             videoContainer.style.height = desiredHeight + 'px';
-
             video.style.width = '100%';
             video.style.height = '100%';
             video.style.objectFit = 'contain';
-
             canvas.style.width = '100%';
             canvas.style.height = '100%';
         }
@@ -194,19 +188,15 @@
             }
         }
 
-        // [MODIFICA] Carica i riferimenti corretti dal localStorage
         function loadReferenceFromStorage() {
             const storedCleanReference = localStorage.getItem('cleanReferenceImage');
             const storedOverlay = localStorage.getItem('validationOverlayImage');
             const storedMetadata = localStorage.getItem('referenceMetadata');
 
             if (storedCleanReference && storedOverlay && storedMetadata) {
-
-                // 1. Carica l'immagine PULITA (per il backend)
                 cleanReferenceImage = new Image();
                 cleanReferenceImage.src = storedCleanReference;
 
-                // 2. Carica l'immagine OVERLAY (per il canvas)
                 validationOverlayImage = new Image();
                 validationOverlayImage.src = storedOverlay;
 
@@ -214,19 +204,13 @@
                     referenceMetadata = JSON.parse(storedMetadata);
                 } catch (e) {
                     console.error("Errore parsing metadata:", e);
-                    referenceMetadata = {}; // Fallback
+                    referenceMetadata = {};
                 }
 
-
-                console.log('✅ Riferimento caricato dal localStorage (validation.html)');
-                console.log('   - Immagine PULITA caricata (per backend)');
-                console.log('   - Immagine OVERLAY caricata (per canvas)');
-                console.log('📊 Metadata:', referenceMetadata);
-
+                console.log('📊 Metadata caricati:', referenceMetadata);
 
                 const referencePreview = document.getElementById('referencePreview');
                 if (referencePreview) {
-                    // [MODIFICA] Mostra l'overlay nell'anteprima, è più utile
                     const sensorBadge = referenceMetadata.sensorsFound !== undefined
                         ? `<span class="badge bg-success ms-2"><i class="bi bi-bullseye"></i> ${referenceMetadata.sensorsFound} Sensori</span>`
                         : '';
@@ -239,15 +223,9 @@
                 <div class="card-body">
                     <img src="${storedOverlay}" class="img-fluid rounded mb-2"
                          style="max-height: 200px; background: #333; border: 1px solid #444;">
-                    <p class="mb-1">
-                        <strong>Guida Overlay</strong>
-                        ${sensorBadge}
-                    </p>
-                    <p class="mb-0"><small class="text-muted">
-                        Caricato: ${uploadDate}
-                    </small></p>
-                </div>
-            `;
+                    <p class="mb-1"><strong>Guida Overlay</strong> ${sensorBadge}</p>
+                    <p class="mb-0"><small class="text-muted">Caricato: ${uploadDate}</small></p>
+                </div>`;
                 }
 
                 const referenceStatus = document.getElementById('referenceStatus');
@@ -256,7 +234,6 @@
                     referenceStatus.className = 'badge bg-success';
                 }
 
-                // [MODIFICA] Usa l'overlay per impostare le dimensioni
                 validationOverlayImage.onload = () => {
                     adjustContainerToReference(validationOverlayImage.naturalWidth, validationOverlayImage.naturalHeight);
                     syncCanvasResolution();
@@ -271,27 +248,22 @@
                 showStatus('Riferimento caricato! Pronto per la validazione.', 'success');
                 return true;
             }
-
-            console.log('❌ Nessun riferimento trovato (mancano cleanReferenceImage, validationOverlayImage, o metadata)');
+            console.log('❌ Nessun riferimento trovato');
             showStatus('Carica un\'immagine di riferimento per iniziare', 'warning');
             if (startBtn) startBtn.disabled = true;
             return false;
         }
 
-        // Cattura frame dalla webcam
         function captureFrame() {
             if (!video || !canvas) return null;
-
             const tempCanvas = document.createElement('canvas');
-            // Usiamo le dimensioni effettive del video per il capture
             tempCanvas.width = video.videoWidth;
             tempCanvas.height = video.videoHeight;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-            return tempCanvas.toDataURL('image/jpeg', 0.8); // 80% quality
+            return tempCanvas.toDataURL('image/jpeg', 0.8);
         }
 
-        // [MODIFICA] Invia il frame PULITO al server per validazione
         async function validateFrame() {
             if (!isValidating || !cleanReferenceImage) return;
 
@@ -301,11 +273,8 @@
 
                 const response = await fetch('/api/validate_frame', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        // [MODIFICA CHIAVE] Invia l'immagine PULITA per il confronto SSIM
                         reference_image: cleanReferenceImage.src,
                         current_frame: currentFrame
                     })
@@ -314,8 +283,8 @@
                 const result = await response.json();
 
                 if (result.success) {
+                    currentAccuracy = result.accuracy || 0; // Aggiorna var globale per i cerchi verdi
                     updateAccuracyDisplay(result);
-                    // [MODIFICA] Aggiorna le metriche dettagliate
                     updateMetricsDisplay(result.metrics);
                 } else {
                     console.error('Validation error:', result.error);
@@ -325,42 +294,24 @@
             }
         }
 
-        // Aggiorna display accuratezza
         function updateAccuracyDisplay(result) {
             const accuracy = result.accuracy || 0;
             const message = result.message || 'In elaborazione...';
             const direction = result.direction;
 
-            // Mostra il pannello
-            if (accuracyPanel) {
-                accuracyPanel.style.display = 'block';
-            }
+            if (accuracyPanel) accuracyPanel.style.display = 'block';
+            if (accuracyValue) accuracyValue.textContent = `${Math.round(accuracy)}%`;
 
-            // Aggiorna valore accuratezza
-            if (accuracyValue) {
-                accuracyValue.textContent = `${Math.round(accuracy)}%`;
-            }
-
-            // Aggiorna colore cerchio in base all'accuratezza
             if (accuracyCircle) {
                 accuracyCircle.className = 'accuracy-circle';
-                if (accuracy >= 95) {
-                    accuracyCircle.classList.add('excellent');
-                } else if (accuracy >= 90) {
-                    accuracyCircle.classList.add('good');
-                } else if (accuracy >= 80) {
-                    accuracyCircle.classList.add('fair');
-                } else {
-                    accuracyCircle.classList.add('poor');
-                }
+                if (accuracy >= 95) accuracyCircle.classList.add('excellent');
+                else if (accuracy >= 90) accuracyCircle.classList.add('good');
+                else if (accuracy >= 80) accuracyCircle.classList.add('fair');
+                else accuracyCircle.classList.add('poor');
             }
 
-            // Aggiorna messaggio
-            if (accuracyMessage) {
-                accuracyMessage.textContent = message;
-            }
+            if (accuracyMessage) accuracyMessage.textContent = message;
 
-            // Aggiorna suggerimenti direzione
             if (directionHint) {
                 if (direction) {
                     directionHint.innerHTML = `<i class="bi bi-arrow-right"></i> Sposta: <strong>${direction}</strong>`;
@@ -371,10 +322,8 @@
             }
         }
 
-        // [NUOVA FUNZIONE] per aggiornare le metriche
         function updateMetricsDisplay(metrics) {
             if (!metrics) return;
-
             const metricsCard = document.getElementById('metricsCard');
             const ssimValue = document.getElementById('ssimValue');
             const mseValue = document.getElementById('mseValue');
@@ -386,42 +335,33 @@
             if (templateValue) templateValue.textContent = `${metrics.template_match || 0}%`;
         }
 
-        // [MODIFICA] Avvia validazione con overlay
         async function startValidation() {
             if (isValidating) return;
 
-            // [MODIFICA] Controlla entrambe le immagini
             if (!cleanReferenceImage || !validationOverlayImage) {
                 showStatus('Carica prima un\'immagine di riferimento!', 'error');
                 return;
             }
 
-            console.log('Avvio validazione con overlay...');
-
             const camStatus = document.getElementById('camStatus');
 
-            // Inizializza camera
             try {
-                // --- MODIFICA 1b: Assicuriamoci che window.sensorApp esista ---
                 if (!window.sensorApp) {
-                    console.error("ERRORE CRITICO: window.sensorApp non è definito. main.js non è caricato.");
+                    console.error("ERRORE CRITICO: window.sensorApp non definito.");
                     showStatus('Errore app (main.js mancante)', 'error');
                     return;
                 }
 
                 if (!window.sensorApp.stream) {
-                    console.log('Inizializzazione camera...');
                     if (camStatus) {
                         camStatus.textContent = 'Inizializzazione...';
                         camStatus.className = 'badge bg-warning';
                     }
-                    // [MODIFICA] Usa l'overlay per adattare la risoluzione
                     const success = await window.sensorApp.initializeCameraWithAdaptiveResolution(
-                        null, // video element, main.js lo troverà
-                        validationOverlayImage // immagine per aspect ratio
+                        null, validationOverlayImage
                     );
                     if (!success) {
-                        showStatus('Errore nell\'accesso alla fotocamera', 'error');
+                        showStatus('Errore fotocamera', 'error');
                         if (camStatus) {
                             camStatus.textContent = 'Errore';
                             camStatus.className = 'badge bg-danger';
@@ -430,7 +370,6 @@
                     }
                 }
 
-                // Se lo stream esiste già, aggiorniamo solo lo status
                 if (camStatus) {
                     const settings = window.sensorApp.stream.getVideoTracks()[0].getSettings();
                     camStatus.textContent = `Attiva (${settings.width}x${settings.height})`;
@@ -440,14 +379,9 @@
             } catch (err) {
                 console.error("Errore init camera:", err);
                 showStatus('Errore fotocamera: ' + err.message, 'error');
-                if (camStatus) {
-                    camStatus.textContent = 'Errore';
-                    camStatus.className = 'badge bg-danger';
-                }
                 return;
             }
 
-            // [MODIFICA] Usa l'overlay per adattare il container
             if (validationOverlayImage && validationOverlayImage.naturalWidth > 0) {
                 adjustContainerToReference(validationOverlayImage.naturalWidth, validationOverlayImage.naturalHeight);
             }
@@ -462,16 +396,11 @@
                 validationStatus.className = 'badge bg-success';
             }
 
-            showStatus('Validazione attiva - Allinea il tuo arto con l\'overlay', 'info');
-
-            // Avvia rendering overlay
+            showStatus('Validazione attiva', 'info');
             renderOverlay();
-
-            // Avvia validazione periodica (ogni 500ms per non sovraccaricare)
             validationIntervalId = setInterval(validateFrame, 500);
         }
 
-        // [MODIFICA] Loop di rendering overlay
         function renderOverlay() {
             if (!isValidating) {
                 if (animationFrameId) {
@@ -481,28 +410,26 @@
                 return;
             }
 
-            // [MODIFICA] Controlla l'immagine overlay
             if (!video || !canvas || !ctx || !validationOverlayImage) {
                 animationFrameId = requestAnimationFrame(renderOverlay);
                 return;
             }
 
             syncCanvasResolution();
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // 1. Disegna immagine base (con cerchi rossi)
             ctx.globalAlpha = overlayOpacity;
 
-            // [MODIFICA] Usa l'immagine overlay
             const imgW = validationOverlayImage.naturalWidth;
             const imgH = validationOverlayImage.naturalHeight;
             const cw = canvas.width;
             const ch = canvas.height;
+            let drawW, drawH, offsetX, offsetY;
 
             if (imgW > 0 && imgH > 0) {
                 const imgAspect = imgW / imgH;
                 const canvasAspect = cw / ch;
-                let drawW, drawH, offsetX, offsetY;
 
                 if (canvasAspect > imgAspect) {
                     drawH = ch;
@@ -511,22 +438,55 @@
                     drawW = cw;
                     drawH = Math.round(drawW / imgAspect);
                 }
-
                 offsetX = Math.round((cw - drawW) / 2);
                 offsetY = Math.round((ch - drawH) / 2);
 
-                // [MODIFICA] Disegna l'immagine overlay
                 ctx.drawImage(validationOverlayImage, offsetX, offsetY, drawW, drawH);
             }
 
-            ctx.globalAlpha = 1.0;
+            // 2. DISEGNA CERCHI VERDI SOPRA QUELLI ROSSI SE ACCURACY >= 85%
+            if (currentAccuracy >= 85 && referenceMetadata && referenceMetadata.sensors_data) {
+                ctx.globalAlpha = 1.0;
+                ctx.strokeStyle = '#00FF00';
+                ctx.lineWidth = 4;
+                ctx.shadowColor = '#00FF00';
+                ctx.shadowBlur = 10;
 
-            // ... (testo informativo, non modificato) ...
+                const scaleX = drawW / imgW;
+                const scaleY = drawH / imgH;
+
+                referenceMetadata.sensors_data.forEach(sensor => {
+                    const cx = offsetX + (sensor.x * scaleX);
+                    const cy = offsetY + (sensor.y * scaleY);
+                    const r = sensor.r * scaleX;
+
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+                    ctx.stroke();
+
+                    // Centro
+                    ctx.fillStyle = '#00FF00';
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+                ctx.shadowBlur = 0; // Reset ombra
+            }
+
+            // 3. Testo Status su Canvas
+            ctx.globalAlpha = 1.0;
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(10, 10, 250, 50);
-            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(10, 10, 250, 60);
+
             ctx.font = 'bold 16px Arial';
-            ctx.fillText('Allinea il tuo arto', 20, 35);
+            if (currentAccuracy >= 85) {
+                ctx.fillStyle = '#00ff00';
+                ctx.fillText('✓ POSIZIONE OK!', 20, 35);
+            } else {
+                ctx.fillStyle = '#ff3333';
+                ctx.fillText('Allinea il tuo arto', 20, 35);
+            }
+
             ctx.fillStyle = '#ffffff';
             ctx.font = '14px Arial';
             ctx.fillText(`Opacità: ${Math.round(overlayOpacity * 100)}%`, 20, 55);
@@ -534,63 +494,38 @@
             animationFrameId = requestAnimationFrame(renderOverlay);
         }
 
-        // Ferma validazione
         function stopValidation() {
-            console.log('Arresto validazione...');
             isValidating = false;
-
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
-
             if (validationIntervalId) {
                 clearInterval(validationIntervalId);
                 validationIntervalId = null;
             }
-
-            if (ctx && canvas) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-
-            if (accuracyPanel) {
-                accuracyPanel.style.display = 'none';
-            }
-
-            // [MODIFICA] Nascondi anche le metriche
+            if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (accuracyPanel) accuracyPanel.style.display = 'none';
             const metricsCard = document.getElementById('metricsCard');
             if (metricsCard) metricsCard.style.display = 'none';
 
-
             if (startBtn) startBtn.disabled = false;
             if (stopBtn) stopBtn.disabled = true;
-
             const validationStatus = document.getElementById('validationStatus');
             if (validationStatus) {
                 validationStatus.textContent = 'Fermo';
                 validationStatus.className = 'badge bg-secondary';
             }
-
             showStatus('Validazione fermata', 'info');
         }
 
-        // Event listeners
-        if (startBtn) {
-            startBtn.addEventListener('click', startValidation);
-        }
+        if (startBtn) startBtn.addEventListener('click', startValidation);
+        if (stopBtn) stopBtn.addEventListener('click', stopValidation);
 
-        if (stopBtn) {
-            stopBtn.addEventListener('click', stopValidation);
-        }
-
-        // [MODIFICA] Aggiunto slider opacità
         if (opacitySlider && opacityValue) {
             opacitySlider.addEventListener('input', (e) => {
                 overlayOpacity = parseInt(e.target.value, 10) / 100;
                 opacityValue.textContent = e.target.value;
-                if (isValidating) { // Aggiorna solo se la validazione è attiva
-                    // Non è necessario un render separato, il loop lo prenderà
-                }
             });
         }
 
@@ -598,13 +533,10 @@
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(async () => {
-                // [MODIFICA] Usa l'overlay per il resize
                 if (validationOverlayImage && validationOverlayImage.naturalWidth > 0) {
                     adjustContainerToReference(validationOverlayImage.naturalWidth, validationOverlayImage.naturalHeight);
                     syncCanvasResolution();
-
                     if (window.sensorApp && window.sensorApp.stream && !isValidating) {
-                        console.log('Aggiornamento risoluzione camera dopo resize...');
                         await window.sensorApp.updateCameraResolution(validationOverlayImage);
                     }
                 } else {
@@ -614,7 +546,6 @@
             }, 500);
         });
 
-        // Funzione helper per mostrare messaggi
         function showStatus(message, type = 'info') {
             const statusElement = document.getElementById('statusMessage');
             if (statusElement) {
@@ -629,42 +560,16 @@
             }
         }
 
-        // Inizializzazione
         document.addEventListener('DOMContentLoaded', function () {
-            console.log('🚀 Inizializzazione pagina validazione overlay...');
-
+            console.log('🚀 Init Page Validation...');
             const hasReference = loadReferenceFromStorage();
-
-            if (!hasReference) {
-                if (startBtn) startBtn.disabled = true;
-            } else {
+            if (!hasReference && startBtn) startBtn.disabled = true;
+            else {
                 if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
                 syncCanvasResolution();
             }
-
-            // [MODIFICA] Assicurati che il valore iniziale dello slider sia applicato
-            if (opacitySlider) {
-                overlayOpacity = parseInt(opacitySlider.value, 10) / 100;
-            }
-            if (opacityValue) {
-                opacityValue.textContent = opacitySlider.value;
-            }
-
-            // --- MODIFICA 1c: Rimuoviamo il controllo ridondante ---
-            // Questo blocco non è più necessario perché main.js è
-            // caricato prima e in modo bloccante. window.sensorApp
-            // esisterà sempre a questo punto.
-            /*
-            if (typeof window.sensorApp === 'undefined') {
-                console.warn('⚠️ window.sensorApp (da main.js) non trovato. Assicurati che main.js sia caricato.');
-                window.sensorApp = {
-                    initializeCameraWithAdaptiveResolution: async () => {
-                        console.error("Camera non inizializzata, main.js mancante");
-                        return false;
-                    }
-                };
-            }
-            */
+            if (opacitySlider) overlayOpacity = parseInt(opacitySlider.value, 10) / 100;
+            if (opacityValue) opacityValue.textContent = opacitySlider.value;
         });
     </script>
 
