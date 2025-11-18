@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-123-change-in-production'
     UPLOAD_FOLDER = 'uploads'
@@ -21,4 +22,4 @@ class Config:
 
     # Validation
     POSITION_TOLERANCE = 25  # pixels
-    ANGLE_TOLERANCE = 15     # degrees
+    ANGLE_TOLERANCE = 15  # degrees

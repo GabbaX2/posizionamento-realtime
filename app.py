@@ -1,16 +1,13 @@
-from flask import Flask, render_template, request, jsonify, session, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import json
 import base64
-import numpy as np
-import cv2
 import logging
 
 # Assumendo che config.py, image_processing.py e background_removal.py
 # esistano nelle cartelle corrette
 from config import Config
 from services.validation_service import ValidationService
-from utils.image_processing import encode_image_to_base64
 from utils.background_removal import remove_background_from_pil
 from PIL import Image
 import io
