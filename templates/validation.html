@@ -418,7 +418,7 @@
             syncCanvasResolution();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Disegna immagine base (con cerchi rossi)
+            // 1. Disegna immagine base (con cerchi rossi fissi)
             ctx.globalAlpha = overlayOpacity;
 
             const imgW = validationOverlayImage.naturalWidth;
@@ -447,10 +447,12 @@
             // 2. DISEGNA CERCHI VERDI SOPRA QUELLI ROSSI SE ACCURACY >= 85%
             if (currentAccuracy >= 85 && referenceMetadata && referenceMetadata.sensors_data) {
                 ctx.globalAlpha = 1.0;
+
+                // Stile "Verde Elettrico" per coprire il rosso
                 ctx.strokeStyle = '#00FF00';
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 6; // Spessore maggiorato
                 ctx.shadowColor = '#00FF00';
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = 15; // Glow
 
                 const scaleX = drawW / imgW;
                 const scaleY = drawH / imgH;
@@ -464,10 +466,10 @@
                     ctx.arc(cx, cy, r, 0, 2 * Math.PI);
                     ctx.stroke();
 
-                    // Centro
+                    // Centro verde
                     ctx.fillStyle = '#00FF00';
                     ctx.beginPath();
-                    ctx.arc(cx, cy, 3, 0, 2 * Math.PI);
+                    ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
                     ctx.fill();
                 });
                 ctx.shadowBlur = 0; // Reset ombra
@@ -476,15 +478,15 @@
             // 3. Testo Status su Canvas
             ctx.globalAlpha = 1.0;
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(10, 10, 250, 60);
+            ctx.fillRect(10, 10, 260, 60);
 
             ctx.font = 'bold 16px Arial';
             if (currentAccuracy >= 85) {
-                ctx.fillStyle = '#00ff00';
+                ctx.fillStyle = '#00FF00';
                 ctx.fillText('✓ POSIZIONE OK!', 20, 35);
             } else {
-                ctx.fillStyle = '#ff3333';
-                ctx.fillText('Allinea il tuo arto', 20, 35);
+                ctx.fillStyle = '#FF3333';
+                ctx.fillText('Allinea il tuo arto...', 20, 35);
             }
 
             ctx.fillStyle = '#ffffff';

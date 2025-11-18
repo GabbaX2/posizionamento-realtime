@@ -4,230 +4,232 @@
 
 {% block content %}
     <div class="upload-section">
-    <div class="row justify-content-center">
-    <div class="col-12 col-lg-10">
-    <div class="text-center mb-4 mb-md-5">
-        <div class="upload-icon bg-primary rounded-circle mx-auto mb-3">
-            <i class="bi bi-cloud-upload fs-1 text-white"></i>
-        </div>
-        <h1 class="display-6 display-md-5 fw-bold text-dark mb-2 mb-md-3">Carica Immagine di
-            Riferimento</h1>
-        <p class="lead text-muted d-none d-md-block">Carica un'immagine della gamba (vista anteriore o posteriore)
-        </p>
-        <p class="text-muted d-md-none">Carica l'immagine di riferimento</p>
-    </div>
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-10">
+                <div class="text-center mb-4 mb-md-5">
+                    <div class="upload-icon bg-primary rounded-circle mx-auto mb-3">
+                        <i class="bi bi-cloud-upload fs-1 text-white"></i>
+                    </div>
+                    <h1 class="display-6 display-md-5 fw-bold text-dark mb-2 mb-md-3">Carica Immagine di
+                        Riferimento</h1>
+                    <p class="lead text-muted d-none d-md-block">Carica un'immagine della gamba (vista anteriore o
+                        posteriore)
+                    </p>
+                    <p class="text-muted d-md-none">Carica l'immagine di riferimento</p>
+                </div>
 
-    <div class="card border-0 shadow-lg mb-4">
-        <div class="card-header bg-gradient-primary text-white py-3">
-            <h4 class="mb-0 fs-5 fs-md-4">
-                <i class="bi bi-gear me-2"></i>Configurazione Riferimento
-            </h4>
-        </div>
-        <div class="card-body p-3 p-md-4">
-            <form id="uploadForm" enctype="multipart/form-data" class="needs-validation" novalidate>
+                <div class="card border-0 shadow-lg mb-4">
+                    <div class="card-header bg-gradient-primary text-white py-3">
+                        <h4 class="mb-0 fs-5 fs-md-4">
+                            <i class="bi bi-gear me-2"></i>Configurazione Riferimento
+                        </h4>
+                    </div>
+                    <div class="card-body p-3 p-md-4">
+                        <form id="uploadForm" enctype="multipart/form-data" class="needs-validation" novalidate>
 
-                <input type="hidden" name="limb_type" value="leg">
-                <input type="hidden" name="view_type" value="anterior">
-                <div class="mb-4">
-                    <div class="card border-info">
-                        <div class="card-body">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="removeBackground"
-                                       checked>
-                                <label class="form-check-label fw-semibold" for="removeBackground">
-                                    <i class="bi bi-scissors me-2 text-info"></i>Rimuovi automaticamente lo
-                                    sfondo
+                            <input type="hidden" name="limb_type" value="leg">
+                            <input type="hidden" name="view_type" value="anterior">
+                            <div class="mb-4">
+                                <div class="card border-info">
+                                    <div class="card-body">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="removeBackground"
+                                                   checked>
+                                            <label class="form-check-label fw-semibold" for="removeBackground">
+                                                <i class="bi bi-scissors me-2 text-info"></i>Rimuovi automaticamente lo
+                                                sfondo
+                                            </label>
+                                            <div class="form-text mt-2">
+                                                Richiesto per l'analisi dei contorni. Lo sfondo verrà rimosso per
+                                                permettere l'analisi.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="referenceImage" class="form-label fw-semibold text-dark mb-3">
+                                    <i class="bi bi-image me-2 text-primary"></i>Immagine di Riferimento
                                 </label>
-                                <div class="form-text mt-2">
-                                    Richiesto per l'analisi dei contorni. Lo sfondo verrà rimosso per
-                                    permettere l'analisi.
+
+                                <div
+                                        class="file-upload-area border-2 border-dashed rounded-3 p-4 p-md-5 text-center bg-light position-relative">
+                                    <i class="bi bi-cloud-arrow-up d-block fs-1 text-muted mb-3 mb-md-4"></i>
+                                    <h5 class="text-dark mb-2 mb-md-3 fs-6 fs-md-5">Trascina l'immagine qui</h5>
+                                    <p class="text-muted mb-3 mb-md-4 fs-7">oppure</p>
+
+                                    <div class="d-flex justify-content-center">
+                                        <input class="form-control d-none" type="file" id="referenceImage" name="file"
+                                               accept="image/*" required>
+                                        <button type="button"
+                                                class="btn btn-primary px-4 px-md-5 py-2 py-md-3 touch-target"
+                                                onclick="document.getElementById('referenceImage').click()">
+                                            <i class="bi bi-folder2-open me-2"></i>Scegli File
+                                        </button>
+                                    </div>
+
+                                    <div class="form-text mt-3 mt-md-4 fs-7">
+                                        Formati supportati: JPG, PNG, WebP - Dimensione massima: 10MB
+                                    </div>
+                                </div>
+
+                                <div id="fileInfo" class="mt-3" style="display: none;">
+                                    <div class="alert alert-info d-flex align-items-center py-2">
+                                        <i class="bi bi-info-circle me-2 flex-shrink-0"></i>
+                                        <span id="fileName" class="fs-7"></span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+
+                            <div id="processingStatus" class="mb-4" style="display: none;">
+                                <div class="card border-warning">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center">
+                                            <div class="spinner-border spinner-border-sm text-warning me-3"
+                                                 role="status">
+                                                <span class="visually-hidden">Elaborazione...</span>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1 fw-semibold" id="processingTitle">Elaborazione in
+                                                    corso...</h6>
+                                                <small class="text-muted" id="processingMessage">Attendere prego</small>
+                                            </div>
+                                        </div>
+                                        <div class="progress mt-3" style="height: 6px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                                                 role="progressbar" style="width: 0%" id="processingProgress"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-lg py-3 touch-target" id="uploadBtn">
+                                    <i class="bi bi-cloud-upload me-2"></i>
+                                    <span class="upload-text">Carica Immagine</span>
+                                    <div class="spinner-border spinner-border-sm ms-2 d-none" role="status"
+                                         id="uploadSpinner">
+                                        <span class="visually-hidden">Caricamento...</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <label for="referenceImage" class="form-label fw-semibold text-dark mb-3">
-                        <i class="bi bi-image me-2 text-primary"></i>Immagine di Riferimento
-                    </label>
+                <div id="uploadResult" class="mt-3"></div>
 
-                    <div
-                            class="file-upload-area border-2 border-dashed rounded-3 p-4 p-md-5 text-center bg-light position-relative">
-                        <i class="bi bi-cloud-arrow-up d-block fs-1 text-muted mb-3 mb-md-4"></i>
-                        <h5 class="text-dark mb-2 mb-md-3 fs-6 fs-md-5">Trascina l'immagine qui</h5>
-                        <p class="text-muted mb-3 mb-md-4 fs-7">oppure</p>
-
-                        <div class="d-flex justify-content-center">
-                            <input class="form-control d-none" type="file" id="referenceImage" name="file"
-                                   accept="image/*" required>
-                            <button type="button"
-                                    class="btn btn-primary px-4 px-md-5 py-2 py-md-3 touch-target"
-                                    onclick="document.getElementById('referenceImage').click()">
-                                <i class="bi bi-folder2-open me-2"></i>Scegli File
-                            </button>
-                        </div>
-
-                        <div class="form-text mt-3 mt-md-4 fs-7">
-                            Formati supportati: JPG, PNG, WebP - Dimensione massima: 10MB
-                        </div>
-                    </div>
-
-                    <div id="fileInfo" class="mt-3" style="display: none;">
-                        <div class="alert alert-info d-flex align-items-center py-2">
-                            <i class="bi bi-info-circle me-2 flex-shrink-0"></i>
-                            <span id="fileName" class="fs-7"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="processingStatus" class="mb-4" style="display: none;">
-                    <div class="card border-warning">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center">
-                                <div class="spinner-border spinner-border-sm text-warning me-3"
-                                     role="status">
-                                    <span class="visually-hidden">Elaborazione...</span>
-                                </div>
-                                <div>
-                                    <h6 class="mb-1 fw-semibold" id="processingTitle">Elaborazione in
-                                        corso...</h6>
-                                    <small class="text-muted" id="processingMessage">Attendere prego</small>
-                                </div>
-                            </div>
-                            <div class="progress mt-3" style="height: 6px;">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
-                                     role="progressbar" style="width: 0%" id="processingProgress"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-primary btn-lg py-3 touch-target" id="uploadBtn">
-                        <i class="bi bi-cloud-upload me-2"></i>
-                        <span class="upload-text">Carica Immagine</span>
-                        <div class="spinner-border spinner-border-sm ms-2 d-none" role="status"
-                             id="uploadSpinner">
-                            <span class="visually-hidden">Caricamento...</span>
-                        </div>
+                <div class="text-center mt-3">
+                    <button type="button" class="btn btn-outline-danger" onclick="clearAllReferenceData()">
+                        <i class="bi bi-trash3"></i> Cancella Riferimento Salvato
                     </button>
                 </div>
-            </form>
-        </div>
-    </div>
 
-    <div id="uploadResult" class="mt-3"></div>
+                <div id="referencePreview" class="mt-4" style="display: none;">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-light py-3">
+                            <h4 class="mb-0 text-dark fs-5 fs-md-4">
+                                <i class="bi bi-eye me-2 text-primary"></i>Anteprima Immagine Caricata
+                            </h4>
+                        </div>
+                        <div class="card-body p-3 p-md-4">
+                            <div class="text-center position-relative">
+                                <img id="previewImage" src="" alt="Preview dell'immagine di riferimento"
+                                     class="img-fluid rounded shadow preview-image touch-target"
+                                     style="max-height: 50vh; min-height: 200px; cursor: zoom-in;">
+                                <div class="mt-2">
+                                    <small class="text-muted fs-7">
+                                        <i class="bi bi-zoom-in me-1"></i>Tocca per ingrandire
+                                    </small>
+                                </div>
+                            </div>
 
-    <div class="text-center mt-3">
-        <button type="button" class="btn btn-outline-danger" onclick="clearAllReferenceData()">
-            <i class="bi bi-trash3"></i> Cancella Riferimento Salvato
-        </button>
-    </div>
-
-    <div id="referencePreview" class="mt-4" style="display: none;">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light py-3">
-                <h4 class="mb-0 text-dark fs-5 fs-md-4">
-                    <i class="bi bi-eye me-2 text-primary"></i>Anteprima Immagine Caricata
-                </h4>
-            </div>
-            <div class="card-body p-3 p-md-4">
-                <div class="text-center position-relative">
-                    <img id="previewImage" src="" alt="Preview dell'immagine di riferimento"
-                         class="img-fluid rounded shadow preview-image touch-target"
-                         style="max-height: 50vh; min-height: 200px; cursor: zoom-in;">
-                    <div class="mt-2">
-                        <small class="text-muted fs-7">
-                            <i class="bi bi-zoom-in me-1"></i>Tocca per ingrandire
-                        </small>
+                            <div id="previewInfo" class="row mt-3 mt-md-4 text-center g-2">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div id="previewInfo" class="row mt-3 mt-md-4 text-center g-2">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="detectionResults" class="mt-4" style="display: none;">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-gradient-primary text-white py-3">
-                <h4 class="mb-0 text-white fs-5 fs-md-4">
-                    <i class="bi bi-geo-alt me-2"></i>Contorni e Sensori Rilevati
-                </h4>
-            </div>
-            <div class="card-body p-3 p-md-4">
-                <ul class="nav nav-tabs mb-3" id="imageTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="original-tab" data-bs-toggle="tab"
-                                data-bs-target="#original-pane" type="button" role="tab">
-                            <i class="bi bi-image me-1"></i>Originale (Sfondo Rimosso)
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="annotated-tab" data-bs-toggle="tab"
-                                data-bs-target="#annotated-pane" type="button" role="tab">
-                            <i class="bi bi-lightbulb-fill me-1"></i>Con Rilevamento
-                        </button>
-                    </li>
-                </ul>
-
-                <div class="tab-content" id="imageTabsContent">
-                    <div class="tab-pane fade show active" id="original-pane" role="tabpanel">
-                        <div class="text-center">
-                            <img id="originalImage" src="" alt="Immagine originale"
-                                 class="img-fluid rounded shadow"
-                                 style="max-height: 60vh; cursor: zoom-in;">
+                <div id="detectionResults" class="mt-4" style="display: none;">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-gradient-primary text-white py-3">
+                            <h4 class="mb-0 text-white fs-5 fs-md-4">
+                                <i class="bi bi-geo-alt me-2"></i>Contorni e Sensori Rilevati
+                            </h4>
                         </div>
-                    </div>
+                        <div class="card-body p-3 p-md-4">
+                            <ul class="nav nav-tabs mb-3" id="imageTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="original-tab" data-bs-toggle="tab"
+                                            data-bs-target="#original-pane" type="button" role="tab">
+                                        <i class="bi bi-image me-1"></i>Originale (Sfondo Rimosso)
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="annotated-tab" data-bs-toggle="tab"
+                                            data-bs-target="#annotated-pane" type="button" role="tab">
+                                        <i class="bi bi-lightbulb-fill me-1"></i>Con Rilevamento
+                                    </button>
+                                </li>
+                            </ul>
 
-                    <div class="tab-pane fade" id="annotated-pane" role="tabpanel">
-                        <div class="text-center">
-                            <img id="annotatedImage" src="" alt="Immagine con rilevamento"
-                                 class="img-fluid rounded shadow"
-                                 style="max-height: 60vh; cursor: zoom-in;">
-                        </div>
+                            <div class="tab-content" id="imageTabsContent">
+                                <div class="tab-pane fade show active" id="original-pane" role="tabpanel">
+                                    <div class="text-center">
+                                        <img id="originalImage" src="" alt="Immagine originale"
+                                             class="img-fluid rounded shadow"
+                                             style="max-height: 60vh; cursor: zoom-in;">
+                                    </div>
+                                </div>
 
-                        <div class="mt-4">
-                            <div class="card border-0 shadow-sm">
-                                <div class="card-body p-4">
-                                    <h5 class="mb-4">
-                                        <i class="bi bi-info-circle-fill text-primary me-2"></i>
-                                        Legenda Annotazioni
-                                    </h5>
+                                <div class="tab-pane fade" id="annotated-pane" role="tabpanel">
+                                    <div class="text-center">
+                                        <img id="annotatedImage" src="" alt="Immagine con rilevamento"
+                                             class="img-fluid rounded shadow"
+                                             style="max-height: 60vh; cursor: zoom-in;">
+                                    </div>
 
-                                    <div class="row g-4">
-                                        <div class="col-md-6">
-                                            <div class="border-start border-4 border-success ps-3">
-                                                <h6 class="fw-bold mb-3">
-                                                    <i class="bi bi-check-circle me-2"></i>
-                                                    Contorno della Gamba
-                                                </h6>
-                                                <div class="d-flex align-items-center">
+                                    <div class="mt-4">
+                                        <div class="card border-0 shadow-sm">
+                                            <div class="card-body p-4">
+                                                <h5 class="mb-4">
+                                                    <i class="bi bi-info-circle-fill text-primary me-2"></i>
+                                                    Legenda Annotazioni
+                                                </h5>
+
+                                                <div class="row g-4">
+                                                    <div class="col-md-6">
+                                                        <div class="border-start border-4 border-success ps-3">
+                                                            <h6 class="fw-bold mb-3">
+                                                                <i class="bi bi-check-circle me-2"></i>
+                                                                Contorno della Gamba
+                                                            </h6>
+                                                            <div class="d-flex align-items-center">
                                                     <span class="me-3" style="
                                                         width: 20px;
                                                         height: 20px;
                                                         border: 3px solid #00ff00; /* Verde */
                                                         display: inline-block;
                                                     "></span>
-                                                    <div>
-                                                        <strong>Verde</strong>
-                                                        <small class="d-block text-muted">Contorno principale
-                                                            rilevato</small>
+                                                                <div>
+                                                                    <strong>Verde</strong>
+                                                                    <small class="d-block text-muted">Contorno
+                                                                        principale
+                                                                        rilevato</small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </div>
 
-                                        <div class="col-md-6">
-                                            <div class="border-start border-4 border-danger ps-3">
-                                                <h6 class="fw-bold mb-3">
-                                                    <i class="bi bi-bullseye me-2"></i>
-                                                    Posizioni Sensori
-                                                </h6>
-                                                <div class="d-flex flex-column gap-3" id="sensorLegend">
-                                                    <div class="d-flex align-items-center">
+                                                    <div class="col-md-6">
+                                                        <div class="border-start border-4 border-danger ps-3">
+                                                            <h6 class="fw-bold mb-3">
+                                                                <i class="bi bi-bullseye me-2"></i>
+                                                                Posizioni Sensori
+                                                            </h6>
+                                                            <div class="d-flex flex-column gap-3" id="sensorLegend">
+                                                                <div class="d-flex align-items-center">
                                                         <span class="me-3" style="
                                                             width: 20px;
                                                             height: 20px;
@@ -247,28 +249,35 @@
                                                                 background-color: #ffff00; /* Giallo */
                                                             "></span>
                                                         </span>
-                                                        <div>
-                                                            <strong>Rosso (Esterno) / Giallo (Centro)</strong>
-                                                            <small class="d-block text-muted">Sensori (Cerchi)
-                                                                Rilevati</small>
+                                                                    <div>
+                                                                        <strong>Rosso (Esterno) / Giallo
+                                                                            (Centro)</strong>
+                                                                        <small class="d-block text-muted">Sensori
+                                                                            (Cerchi)
+                                                                            Rilevati</small>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    <div class="mt-4 pt-3 border-top">
-                                        <div class="alert alert-light mb-0">
-                                            <i class="bi bi-lightbulb-fill text-warning me-2"></i>
-                                            <strong>Come leggere l'immagine:</strong>
-                                            <ul class="mb-0 mt-2 small">
-                                                <li>Il <strong>contorno verde</strong> evidenzia la forma della gamba.
-                                                </li>
-                                                <li>I <strong>cerchi rossi con il centro giallo</strong> indicano le
-                                                    posizioni dei sensori rilevati.
-                                                </li>
-                                            </ul>
+                                                <div class="mt-4 pt-3 border-top">
+                                                    <div class="alert alert-light mb-0">
+                                                        <i class="bi bi-lightbulb-fill text-warning me-2"></i>
+                                                        <strong>Come leggere l'immagine:</strong>
+                                                        <ul class="mb-0 mt-2 small">
+                                                            <li>Il <strong>contorno verde</strong> evidenzia la forma
+                                                                della gamba.
+                                                            </li>
+                                                            <li>I <strong>cerchi rossi con il centro giallo</strong>
+                                                                indicano le
+                                                                posizioni dei sensori rilevati.
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -689,8 +698,6 @@
                     console.log(`📁 File selezionato: ${file.name} (${fileSize} MB)`);
 
                     const limbType = document.querySelector('input[name="limb_type"]').value;
-                    // const viewType = document.querySelector('input[name="view_type"]:checked').value;
-                    // console.log(`🦾 Tipo di arto: ${limbType}, Vista: ${viewType}`);
 
                     // Read and preview image
                     const reader = new FileReader();
@@ -706,7 +713,7 @@
                             previewDiv.style.display = 'block';
 
                             // Update stats
-                            updateImageInfo(file, limbType, "Gamba"); // Semplificato
+                            updateImageInfo(file, limbType, "Gamba");
 
                             // Show preview success indicator
                             const previewCard = previewDiv.querySelector('.card');
@@ -734,11 +741,11 @@
                         return;
                     }
 
-                    // [MODIFICA] Puliamo il localStorage manualmente (correzione bug)
+                    // [MODIFICA] Puliamo il localStorage manualmente
                     try {
                         localStorage.removeItem('cleanReferenceImage');
                         localStorage.removeItem('validationOverlayImage');
-                        localStorage.removeItem('referenceImage'); // Vecchia chiave
+                        localStorage.removeItem('referenceImage');
                         localStorage.removeItem('referenceMetadata');
                         console.log('🗑️ Dati di riferimento precedenti rimossi dal localStorage');
                     } catch (error) {
@@ -774,11 +781,6 @@
                             previewImg.src = imageBase64_processed;
                         }
 
-                        // [MODIFICA CHIAVE] STEP UNICO: Caricare l'immagine processata
-                        // L'endpoint /api/upload_reference fa tutto:
-                        // 1. Salva l'immagine pulita
-                        // 2. Analizza contorni e sensori
-                        // 3. Restituisce TUTTE le immagini necessarie
                         updateProcessingStatus('Caricamento e Analisi...', 'Invio al server...', 70);
 
                         const formData = new FormData();
@@ -786,17 +788,15 @@
                         const blob = await base64ToBlob(imageBase64_processed);
                         formData.append('file', blob, file.name);
                         formData.append('session_id', 'default');
-                        // non inviamo più limb_type e view_type, non servono al nuovo service
 
                         const response = await fetch('/api/upload_reference', {
                             method: 'POST',
                             body: formData
                         });
 
-                        const uploadResult = await response.json(); // Risultato da /api/upload_reference
+                        const uploadResult = await response.json();
 
                         if (!response.ok || !uploadResult.success) {
-                            // Prova a leggere l'errore dal JSON, altrimenti usa l'errore HTTP
                             const errorMsg = uploadResult.error || `HTTP error! status: ${response.status}`;
                             throw new Error(errorMsg);
                         }
@@ -804,7 +804,6 @@
                         console.log('✅ Upload e Analisi completati:', uploadResult);
 
                         // [MODIFICA CHIAVE] STEP 2: Salvare i DATI CORRETTI su localStorage
-                        // Tutti i dati provengono da 'uploadResult'
                         updateProcessingStatus('Salvataggio locale...', 'Quasi fatto...', 90);
 
                         try {
@@ -825,15 +824,13 @@
                                 fileName: file.name,
                                 uploadDate: new Date().toISOString(),
                                 session_id: uploadResult.session_id,
-                                sensorsFound: uploadResult.sensors_found, // Da uploadResult
-                                backgroundRemoved: removeBackgroundCheckbox.checked
+                                sensorsFound: uploadResult.sensors_found,
+                                backgroundRemoved: removeBackgroundCheckbox.checked,
+                                sensors_data: uploadResult.sensors_data // <--- AGGIUNTO: Salva le coordinate per i cerchi verdi!
                             };
                             localStorage.setItem('referenceMetadata', JSON.stringify(metadata));
 
-                            console.log('💾 Dati salvati nel localStorage:');
-                            console.log('   - cleanReferenceImage (per backend SSIM)');
-                            console.log('   - validationOverlayImage (per frontend canvas)');
-                            console.log('   - referenceMetadata');
+                            console.log('💾 Dati salvati nel localStorage, incluso sensors_data');
 
                         } catch (error) {
                             if (error.name === 'QuotaExceededError') {
@@ -848,9 +845,6 @@
 
                         updateProcessingStatus('Completato!', 'Tutto pronto', 100);
 
-                        // Mostra i risultati di rilevamento (usiamo i dati di uploadResult)
-                        // 'uploadResult.reference_image' -> tab "Originale"
-                        // 'uploadResult.annotated_image' -> tab "Con Rilevamento"
                         displayDetectionResults(uploadResult);
 
                         // Show success banner
@@ -896,7 +890,7 @@
                     try {
                         localStorage.removeItem('cleanReferenceImage');
                         localStorage.removeItem('validationOverlayImage');
-                        localStorage.removeItem('referenceImage'); // Vecchia chiave
+                        localStorage.removeItem('referenceImage');
                         localStorage.removeItem('referenceMetadata');
                         console.log('🗑️ Dati di riferimento rimossi dal localStorage');
                     } catch (error) {
@@ -961,11 +955,6 @@
             const fileSize = (file.size / 1024 / 1024).toFixed(2);
 
             let viewText = viewType || 'Sconosciuto';
-            // if (viewType === 'anterior') {
-            //     viewText = 'Gamba (Anteriore)';
-            // } else if (viewType === 'posterior') {
-            //     viewText = 'Gamba (Posteriore)';
-            // }
 
             previewInfo.innerHTML = `
             <div class="col-md-4 col-6">
@@ -1084,7 +1073,7 @@
                 </div>
             </div>
         `;
-            targetDiv.insertAdjacentHTML('afterbegin', infoHTML); // Inserisci all'inizio del body della card
+            targetDiv.insertAdjacentHTML('afterbegin', infoHTML);
         }
 
         // Funzione per aprire immagine nel modal

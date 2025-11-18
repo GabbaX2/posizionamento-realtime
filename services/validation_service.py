@@ -93,7 +93,7 @@ class ValidationService:
                 _, buf = cv2.imencode('.png', img)
                 return base64.b64encode(buf).decode()
 
-            # Preparazione dati sensori per il frontend
+            # Preparazione dati sensori per il frontend (coordinate)
             sensors_data_json = []
             if sensors_list is not None:
                 for sensor in sensors_list:
@@ -144,7 +144,7 @@ class ValidationService:
         sensor_color_bgra = (0, 0, 255, 255)
         sensor_center_color_bgra = (0, 255, 255, 255)
 
-        # Contorni Gamba
+        # Contorni
         _, thresh = cv2.threshold(alpha_mask, 10, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -161,9 +161,9 @@ class ValidationService:
             gray_blurred,
             cv2.HOUGH_GRADIENT,
             dp=1,
-            minDist=70,  # <-- FIX: Aumentato per evitare sovrapposizioni
+            minDist=70,  # FIX: Distanza minima alta per evitare sovrapposizioni
             param1=50,
-            param2=26,  # <-- FIX: Aumentato per ridurre falsi positivi
+            param2=26,  # FIX: Soglia più severa per evitare falsi positivi
             minRadius=15,
             maxRadius=45
         )
@@ -181,6 +181,7 @@ class ValidationService:
         return annotated_image, contours, sensors_list, drawing_overlay_bgra
 
     def preprocess_for_comparison(self, image: np.ndarray, target_size: Tuple[int, int] = (640, 480)) -> np.ndarray:
+        # (Codice rimasto invariato per la funzione base, ma non usato nel nuovo calcolo similarity)
         h, w = image.shape[:2]
         target_w, target_h = target_size
         scale = min(target_w / w, target_h / h)
@@ -196,7 +197,7 @@ class ValidationService:
         return blurred
 
     def calculate_image_similarity(self, reference: np.ndarray, current: np.ndarray) -> Dict:
-        """ Calcola la somiglianza applicando la maschera per ignorare lo sfondo """
+        """ Calcola somiglianza usando la MASCHERA per ignorare lo sfondo (FIX per il 14%) """
         try:
             h_ref, w_ref = reference.shape[:2]
             current_resized = cv2.resize(current, (w_ref, h_ref))
@@ -209,6 +210,7 @@ class ValidationService:
                 _, mask = cv2.threshold(gray_ref, 10, 255, cv2.THRESH_BINARY)
                 ref_rgb = reference
 
+            # Applica maschera a entrambi
             current_masked = cv2.bitwise_and(current_resized, current_resized, mask=mask)
             ref_masked = cv2.bitwise_and(ref_rgb, ref_rgb, mask=mask)
 
