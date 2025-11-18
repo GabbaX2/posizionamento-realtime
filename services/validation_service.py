@@ -196,39 +196,59 @@ class ValidationService:
         return blurred
 
     def calculate_image_similarity(self, reference: np.ndarray, current: np.ndarray) -> Dict:
+        """ Calcola la somiglianza applicando la maschera per ignorare lo sfondo """
         try:
-            ref_processed = self.preprocess_for_comparison(reference)
-            curr_processed = self.preprocess_for_comparison(current)
+            h_ref, w_ref = reference.shape[:2]
+            current_resized = cv2.resize(current, (w_ref, h_ref))
 
-            ssim_score, _ = ssim(ref_processed, curr_processed, full=True)
+            if reference.shape[2] == 4:
+                mask = reference[:, :, 3]
+                ref_rgb = reference[:, :, :3]
+            else:
+                gray_ref = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
+                _, mask = cv2.threshold(gray_ref, 10, 255, cv2.THRESH_BINARY)
+                ref_rgb = reference
+
+            current_masked = cv2.bitwise_and(current_resized, current_resized, mask=mask)
+            ref_masked = cv2.bitwise_and(ref_rgb, ref_rgb, mask=mask)
+
+            ref_gray = cv2.cvtColor(ref_masked, cv2.COLOR_BGR2GRAY)
+            curr_gray = cv2.cvtColor(current_masked, cv2.COLOR_BGR2GRAY)
+
+            ref_blur = cv2.GaussianBlur(ref_gray, (5, 5), 0)
+            curr_blur = cv2.GaussianBlur(curr_gray, (5, 5), 0)
+
+            win_size = min(7, min(h_ref, w_ref))
+            if win_size % 2 == 0: win_size -= 1
+
+            ssim_score, _ = ssim(ref_blur, curr_blur, win_size=win_size, full=True)
             ssim_percentage = ssim_score * 100
 
-            mse = np.mean((ref_processed.astype(float) - curr_processed.astype(float)) ** 2)
-            mse_percentage = max(0, min(100, 100 - (mse / 100)))
+            res_template = cv2.matchTemplate(current_resized, ref_rgb, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(res_template)
+            template_percentage = max(0, max_val * 100)
 
-            if ref_processed.shape[0] > curr_processed.shape[0] or ref_processed.shape[1] > curr_processed.shape[1]:
-                template_percentage = 0.0
-                max_loc = (0, 0)
+            diff = cv2.absdiff(ref_blur, curr_blur)
+            non_zero_count = cv2.countNonZero(mask)
+
+            if non_zero_count > 0:
+                mse = np.sum(diff ** 2) / non_zero_count
+                mse_percentage = max(0, 100 - (mse / 10))
             else:
-                result = cv2.matchTemplate(curr_processed, ref_processed, cv2.TM_CCOEFF_NORMED)
-                _, max_val, _, max_loc = cv2.minMaxLoc(result)
-                template_percentage = max(0, max_val * 100)
+                mse_percentage = 0
 
-            combined_accuracy = (ssim_percentage * 0.6 + mse_percentage * 0.2 + template_percentage * 0.2)
+            combined_accuracy = (ssim_percentage * 0.4 + template_percentage * 0.4 + mse_percentage * 0.2)
 
-            h, w = ref_processed.shape
-            offset_x = max_loc[0] - 0
-            offset_y = max_loc[1] - 0
-            offset_x_norm = offset_x / w if w > 0 else 0
-            offset_y_norm = offset_y / h if h > 0 else 0
+            offset_x = (max_loc[0] - 0) / w_ref if w_ref > 0 else 0
+            offset_y = (max_loc[1] - 0) / h_ref if h_ref > 0 else 0
 
             return {
                 'ssim': ssim_percentage,
                 'mse': mse_percentage,
                 'template_match': template_percentage,
                 'combined_accuracy': combined_accuracy,
-                'offset_x': offset_x_norm,
-                'offset_y': offset_y_norm
+                'offset_x': offset_x,
+                'offset_y': offset_y
             }
         except Exception as e:
             logger.error(f"[ERROR] Similarity calculation error: {e}", exc_info=True)
