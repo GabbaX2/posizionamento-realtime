@@ -2,24 +2,25 @@ import cv2
 import base64
 import numpy as np
 import os
+import logging
 from typing import Dict, Tuple, Optional
 from skimage.metrics import structural_similarity as ssim
 
+# Definisci il logger per questo modulo
+logger = logging.getLogger(__name__)
 
-# NOTA: Non importiamo più nulla da 'models.limb_detector'
 
 class ValidationService:
     def __init__(self):
         """
-        Inizializza il servizio. Non c'è più nessun detector da caricare.
+        Inizializza il servizio.
         """
         self.sessions: Dict[str, Dict] = {}
         print("✅ ValidationService (modalità Contorni/Sensori) inizializzato.")
 
     def handle_reference_upload(self, request) -> Dict:
         """
-        Gestisce l'upload dell'immagine di riferimento.
-        Ora rileva contorni e sensori (cerchi).
+        Gestisce l'upload dell'immagine di riferimento, rileva contorni e sensori.
         """
         try:
             if 'file' not in request.files:
@@ -31,15 +32,12 @@ class ValidationService:
             if file.filename == '':
                 return {'success': False, 'error': 'Nessun file selezionato'}
 
-            print(f"[UPLOAD] Processing file: {file.filename} per sessione {session_id}")
+            logger.info(f"[UPLOAD] Processing file: {file.filename} per sessione {session_id}")
 
-            # Leggi immagine
+            # Leggi immagine e preserva il canale Alpha (trasparenza)
             file.seek(0)
             image_bytes = file.read()
             nparr = np.frombuffer(image_bytes, np.uint8)
-
-            # --- MODIFICA CHIAVE ---
-            # Carichiamo l'immagine "UNCHANGED" per preservare il canale Alpha (trasparenza)
             image_bgra = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
 
             if image_bgra is None:
@@ -47,73 +45,60 @@ class ValidationService:
 
             # Verifica che l'immagine abbia 4 canali (BGR + Alpha)
             if image_bgra.ndim < 3 or image_bgra.shape[2] != 4:
-                print(f"❌ Errore: l'immagine non ha un canale alpha. Shape: {image_bgra.shape}")
+                logger.error(f"Errore: l'immagine non ha un canale alpha. Shape: {image_bgra.shape}")
                 return {
                     'success': False,
-                    'error': "Immagine non ha sfondo trasparente. Assicurati che 'Rimuovi Sfondo' sia attivo e abbia funzionato."
+                    'error': "Immagine non ha sfondo trasparente. Assicurati che 'Rimuovi Sfondo' sia attivo."
                 }
 
-            print(f"[UPLOAD] Immagine con sfondo rimosso caricata. Shape: {image_bgra.shape}")
+            logger.info(f"[UPLOAD] Immagine BGRA caricata. Shape: {image_bgra.shape}")
 
-            # Estrai la parte BGR per il confronto e l'annotazione
+            # Estrai la parte BGR pulita
             image_bgr_clean = image_bgra[:, :, :3].copy()
 
-            # --- NUOVA LOGICA: Trova Contorni e Sensori ---
-            print("[DETECTION] Inizio rilevamento contorni e sensori...")
-            # Modifica: _find_contours_and_sensors ora restituisce 4 valori
+            # Trova Contorni e Sensori
+            logger.info("[DETECTION] Inizio rilevamento contorni e sensori...")
             annotated_image, contours_list, sensors_list, drawing_overlay_bgra = self._find_contours_and_sensors(
                 image_bgra)
 
             sensors_count = len(sensors_list) if sensors_list is not None else 0
             contours_count = len(contours_list) if contours_list is not None else 0
 
-            print(f"[DETECTION] ✅ Rilevati {contours_count} contorni e {sensors_count} sensori (cerchi).")
+            logger.info(f"[DETECTION] Rilevati {contours_count} contorni e {sensors_count} sensori (cerchi).")
 
-            # Salva l'immagine BGR PULITA (senza disegni) per il confronto SSIM
-            temp_filename = f"{session_id}_reference.png"
+            # Salva le immagini su disco
             upload_folder = 'uploads'
             os.makedirs(upload_folder, exist_ok=True)
-            filepath = os.path.join(upload_folder, temp_filename)
+
+            filepath = os.path.join(upload_folder, f"{session_id}_reference.png")
             cv2.imwrite(filepath, image_bgr_clean)
-            print(f"[UPLOAD] Immagine di riferimento (pulita) salvata in: {filepath}")
+            logger.info(f"[UPLOAD] Immagine di riferimento (pulita) salvata in: {filepath}")
 
-            # Salva l'immagine ANNOTATA (con disegni)
-            annotated_filepath = None
             if annotated_image is not None:
-                annotated_filename = f"{session_id}_annotated.png"
-                annotated_filepath = os.path.join(upload_folder, annotated_filename)
+                annotated_filepath = os.path.join(upload_folder, f"{session_id}_annotated.png")
                 cv2.imwrite(annotated_filepath, annotated_image)
-                print(f"[UPLOAD] Immagine annotata salvata in: {annotated_filepath}")
+                logger.info(f"[UPLOAD] Immagine annotata salvata in: {annotated_filepath}")
 
-            # --- NUOVA PARTE: Salva l'immagine "Solo Disegno" (con trasparenza) ---
-            drawing_overlay_filepath = None
             if drawing_overlay_bgra is not None:
-                drawing_overlay_filename = f"{session_id}_drawing_overlay.png"
-                drawing_overlay_filepath = os.path.join(upload_folder, drawing_overlay_filename)
-                # Salviamo il file BGRA (con trasparenza)
+                drawing_overlay_filepath = os.path.join(upload_folder, f"{session_id}_drawing_overlay.png")
                 cv2.imwrite(drawing_overlay_filepath, drawing_overlay_bgra)
-                print(f"[UPLOAD] Immagine 'Solo Disegno' salvata in: {drawing_overlay_filepath}")
+                logger.info(f"[UPLOAD] Immagine 'Solo Disegno' salvata in: {drawing_overlay_filepath}")
 
             # Salva i dati della sessione
-            session_data = {
+            self.sessions[session_id] = {
                 'reference_image': filepath,
-                'annotated_image': annotated_filepath,
-                'drawing_overlay_image': drawing_overlay_filepath,  # AGGIUNTO
                 'upload_time': str(np.datetime64('now')),
                 'sensors_found': sensors_count,
                 'contours_found': contours_count
             }
-            self.sessions[session_id] = session_data
 
-            # Codifica in base64 per l'anteprima (immagine pulita)
+            # Codifica in base64 per la risposta JSON
             _, buffer_preview = cv2.imencode('.png', image_bgr_clean)
             preview_base64 = base64.b64encode(buffer_preview).decode()
 
-            # Codifica in base64 per l'immagine ANNOTATA (sopra la gamba)
             _, buffer_annotated = cv2.imencode('.png', annotated_image)
             annotated_base64 = base64.b64encode(buffer_annotated).decode()
 
-            # --- NUOVA PARTE: Codifica in base64 per l'immagine Solo Disegno ---
             _, buffer_drawing_overlay = cv2.imencode('.png', drawing_overlay_bgra)
             drawing_overlay_base64 = base64.b64encode(buffer_drawing_overlay).decode()
 
@@ -121,17 +106,17 @@ class ValidationService:
                 'success': True,
                 'message': 'Immagine di riferimento caricata e analizzata con successo',
                 'session_id': session_id,
-                'reference_image': preview_base64,  # Immagine pulita (per SSIM)
-                'annotated_image': annotated_base64,  # Immagine con disegni sopra la gamba
-                'drawing_overlay_image': drawing_overlay_base64,  # <<< NUOVO: Immagine Solo Disegno
+                'reference_image': preview_base64,
+                'annotated_image': annotated_base64,
+                'drawing_overlay_image': drawing_overlay_base64,
                 'sensors_found': sensors_count,
-                'contours_found': contours_count  # Aggiunto per i risultati
+                'contours_found': contours_count
             }
 
             return response
 
         except Exception as e:
-            print(f"[ERROR] Upload error: {e}")
+            logger.error(f"[ERROR] Upload error: {e}", exc_info=True)
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': f'Errore durante il caricamento: {str(e)}'}
@@ -139,85 +124,76 @@ class ValidationService:
     def _find_contours_and_sensors(self, image_bgra: np.ndarray) -> Tuple[
         np.ndarray, Optional[list], Optional[list], np.ndarray]:
         """
-        Trova il contorno principale e i sensori (cerchi) su un'immagine BGRA.
-
-        Args:
-            image_bgra: Immagine a 4 canali (BGR+Alpha)
-
-        Returns:
-            Tuple: (immagine_annotata_bgr, lista_contorni, lista_cerchi, immagine_solo_disegno_bgra)
+        Trova contorno principale, sensori (cerchi) e rimuove watermark.
         """
-        # 1. Crea l'immagine di output e ottieni la maschera
+        # 1. Estrai immagini e maschera
         annotated_image = image_bgra[:, :, :3].copy()
         alpha_mask = image_bgra[:, :, 3]
-
-        # --- CREAZIONE NUOVO OUTPUT (SOLO DISEGNO) ---
-        # Crea un'immagine BGRA completamente trasparente (altezza, larghezza, 4 canali)
         height, width = image_bgra.shape[:2]
-        # Inizializzata a zeri: BGR=0, Alpha=0 (trasparente)
+
+        # 2. Rimuovi Watermark (es. VCam)
+        y_end_pct = 0.08
+        x_end_pct = 0.20
+        y_end = int(height * y_end_pct)
+        x_end = int(width * x_end_pct)
+
+        logger.info(f"Rimozione watermark nell'area: Y[0:{y_end}], X[0:{x_end}]")
+        annotated_image[0:y_end, 0:x_end] = [0, 0, 0]
+        alpha_mask[0:y_end, 0:x_end] = 0
+
+        # 3. Prepara l'immagine "Solo Disegno"
         drawing_overlay_bgra = np.zeros((height, width, 4), dtype=np.uint8)
 
-        # Definisci colori con Alpha opaco (255)
-        contour_color_bgr = (0, 255, 0)  # Verde
-        contour_color_bgra = (0, 255, 0, 255)  # Verde opaco (Alpha=255)
-        sensor_color_bgr = (0, 0, 255)  # Rosso
-        sensor_center_color_bgr = (0, 255, 255)  # Giallo
-        sensor_color_bgra = (0, 0, 255, 255)  # Rosso opaco
-        sensor_center_color_bgra = (0, 255, 255, 255)  # Giallo opaco
+        # Definisci colori
+        contour_color_bgr = (0, 255, 0)
+        contour_color_bgra = (0, 255, 0, 255)
+        sensor_color_bgr = (0, 0, 255)
+        sensor_center_color_bgr = (0, 255, 255)
+        sensor_color_bgra = (0, 0, 255, 255)
+        sensor_center_color_bgra = (0, 255, 255, 255)
 
-        # 2. Trova il contorno principale (la gamba)
-        # Usiamo la maschera alpha per trovare i contorni
+        # 4. Trova il contorno principale (la gamba)
         _, thresh = cv2.threshold(alpha_mask, 10, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        main_contour = None
         if contours:
-            # Trova il contorno più grande (che dovrebbe essere la gamba)
             main_contour = max(contours, key=cv2.contourArea)
-
-            # Disegna il contorno sulla nostra immagine di output (sopra la gamba)
             cv2.drawContours(annotated_image, [main_contour], -1, contour_color_bgr, 3)
-
-            # Disegna il contorno sulla nuova immagine trasparente
             cv2.drawContours(drawing_overlay_bgra, [main_contour], -1, contour_color_bgra, 3)
 
-        # 3. Trova i sensori (cerchi)
-        # Converti l'immagine BGR in scala di grigi
+        # 5. Trova i sensori (cerchi)
         gray = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2GRAY)
 
-        # Applica un blur per ridurre il rumore e aiutare il rilevamento dei cerchi
-        gray_blurred = cv2.medianBlur(gray, 5)
+        # --- MODIFICA 1: Aumentiamo il blur ---
+        # Un blur maggiore (9x9) rimuove i dettagli interni (es. bottone metallico)
+        # che causavano i falsi positivi.
+        gray_blurred = cv2.GaussianBlur(gray, (9, 9), 0)  # Era (5, 5)
 
-        # Usa la Trasformata di Hough per trovare i cerchi
         circles = cv2.HoughCircles(
             gray_blurred,
             cv2.HOUGH_GRADIENT,
             dp=1,
-            minDist=30,  # Distanza minima tra i centri dei cerchi
-            param1=50,  # Soglia alta per Canny edge detector
-            param2=25,  # <<< MODIFICA CHIAVE: Ridotto da 35 a 25 per maggiore sensibilità
-            minRadius=10,  # Raggio minimo (pixel)
-            maxRadius=60  # Raggio massimo (pixel)
+            minDist=30,  # Distanza minima tra i centri
+            param1=50,  # Soglia alta per Canny
+
+            # --- MODIFICHE 2 e 3: Troviamo lo "Sweet Spot" ---
+            param2=21,  # Troviamo un equilibrio (22 era poco, 20 era troppo)
+            minRadius=18,  # Aumentato per ignorare i piccoli dettagli interni
+            maxRadius=45  # Ristretto
         )
 
         sensors_list = []
         if circles is not None:
             circles = np.uint16(np.around(circles))
             sensors_list = circles[0, :]
-
-            # Disegna i cerchi trovati
             for (x, y, r) in sensors_list:
-                # Disegna su immagine annotata (sopra la gamba)
-                cv2.circle(annotated_image, (x, y), r, sensor_color_bgr, 3)  # Rosso
-                cv2.circle(annotated_image, (x, y), 2, sensor_center_color_bgr, 3)  # Giallo
-
-                # Disegna su immagine trasparente
+                cv2.circle(annotated_image, (x, y), r, sensor_color_bgr, 3)
+                cv2.circle(annotated_image, (x, y), 2, sensor_center_color_bgr, 3)
                 cv2.circle(drawing_overlay_bgra, (x, y), r, sensor_color_bgra, 3)
                 cv2.circle(drawing_overlay_bgra, (x, y), 2, sensor_center_color_bgra, 3)
 
         return annotated_image, contours, sensors_list, drawing_overlay_bgra
 
-    # ... (Metodi rimanenti)
     def preprocess_for_comparison(self, image: np.ndarray, target_size: Tuple[int, int] = (640, 480)) -> np.ndarray:
         """ Pre-elabora l'immagine per il confronto SSIM """
         h, w = image.shape[:2]
@@ -257,10 +233,8 @@ class ValidationService:
             combined_accuracy = (ssim_percentage * 0.6 + mse_percentage * 0.2 + template_percentage * 0.2)
 
             h, w = ref_processed.shape
-            center_x = 0
-            center_y = 0
-            offset_x = max_loc[0] - center_x
-            offset_y = max_loc[1] - center_y
+            offset_x = max_loc[0] - 0
+            offset_y = max_loc[1] - 0
             offset_x_norm = offset_x / w if w > 0 else 0
             offset_y_norm = offset_y / h if h > 0 else 0
 
@@ -273,7 +247,7 @@ class ValidationService:
                 'offset_y': offset_y_norm
             }
         except Exception as e:
-            print(f"[ERROR] Similarity calculation error: {e}")
+            logger.error(f"[ERROR] Similarity calculation error: {e}", exc_info=True)
             return {'ssim': 0, 'mse': 0, 'template_match': 0, 'combined_accuracy': 0, 'offset_x': 0, 'offset_y': 0}
 
     def get_alignment_feedback(self, accuracy: float, offset_x: float, offset_y: float) -> Dict:
@@ -324,11 +298,9 @@ class ValidationService:
                 return {'success': False, 'error': 'Errore decodifica immagini'}
 
             similarity_result = self.calculate_image_similarity(reference, current_frame)
-
             accuracy = similarity_result['combined_accuracy']
             offset_x = similarity_result['offset_x']
             offset_y = similarity_result['offset_y']
-
             feedback = self.get_alignment_feedback(accuracy, offset_x, offset_y)
 
             response_data = {
@@ -347,7 +319,7 @@ class ValidationService:
             return response_data
 
         except Exception as e:
-            print(f"[ERROR] Validation error: {e}")
+            logger.error(f"[ERROR] Validation error: {e}", exc_info=True)
             return {'success': False, 'error': f'Errore durante la validazione: {str(e)}'}
 
     def get_validation_status(self, session_id: str) -> Dict:
@@ -367,10 +339,7 @@ class ValidationService:
             'reference_loaded': True,
             'upload_time': session_data['upload_time'],
             'sensors_found': session_data.get('sensors_found', 0)
-            # Abbiamo rimosso limb_type e view_type perché non più usati
         }
-
-        # Non ci sono più 'landmarks' da aggiungere
         return response
 
     def _decode_base64_image(self, base64_string):
@@ -380,9 +349,8 @@ class ValidationService:
         try:
             img_data = base64.b64decode(base64_string)
             np_arr = np.frombuffer(img_data, np.uint8)
-            # Usiamo IMREAD_COLOR qui, assumendo che i frame attuali non siano BGRA
             img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             return img
         except Exception as e:
-            print(f"Errore nella decodifica immagine base64: {e}")
+            logger.error(f"Errore nella decodifica immagine base64: {e}", exc_info=True)
             return None

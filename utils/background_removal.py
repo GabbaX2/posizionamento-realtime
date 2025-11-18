@@ -1,34 +1,64 @@
-from rembg import remove
-from PIL import Image
 import io
-import base64
+import logging
+import os
 import numpy as np
 import cv2
-import logging
+import requests
+from PIL import Image
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+REMOVE_BG_API_URL = "https://api.remove.bg/v1.0/removebg"
 
-# ---------- Helpers (Invariati) ----------
+
+def _call_remove_bg_api(pil_img_rgb, api_key):
+    """Chiama l'API commerciale remove.bg."""
+    try:
+        img_io = io.BytesIO()
+        pil_img_rgb.save(img_io, format="PNG")
+        img_io.seek(0)
+
+        files = {'image_file': ('image.png', img_io, 'image/png')}
+        data = {'size': 'auto'}
+        headers = {'X-Api-Key': api_key}
+
+        logger.info("Chiamata API remove.bg in corso...")
+        response = requests.post(
+            REMOVE_BG_API_URL,
+            files=files,
+            data=data,
+            headers=headers,
+            timeout=30
+        )
+
+        if response.status_code == requests.codes.ok:
+            result_img_io = io.BytesIO(response.content)
+            return Image.open(result_img_io).convert("RGBA")
+        else:
+            logger.error(f"Errore API {response.status_code}: {response.text}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Eccezione connessione API: {e}")
+        return None
+    except Exception:
+        logger.exception("Errore generico chiamata API")
+        return None
+
+
 def _ensure_rgb(pil_img):
-    if pil_img.mode in ("RGBA", "LA"):
-        return pil_img.convert("RGB")
-    if pil_img.mode != "RGB":
+    """Converte immagine PIL in RGB."""
+    if pil_img.mode in ("RGBA", "LA") or pil_img.mode != "RGB":
         return pil_img.convert("RGB")
     return pil_img
 
 
-def _auto_contrast_and_denoise_cv(img_bgr):
-    img = img_bgr.copy()
-    img = cv2.bilateralFilter(img, d=9, sigmaColor=75, sigmaSpace=75)
-    ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-    ycrcb[:, :, 0] = cv2.equalizeHist(ycrcb[:, :, 0])
-    img = cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
-    return img
-
-
 def _resize_for_speed(pil_img, max_dim=1024):
+    """Ridimensiona mantenendo aspect ratio."""
     w, h = pil_img.size
     max_current = max(w, h)
     if max_current <= max_dim:
@@ -38,11 +68,12 @@ def _resize_for_speed(pil_img, max_dim=1024):
     return pil_img.resize(new_size, Image.LANCZOS), scale
 
 
-# ---------- GrabCut fallback (Invariato) ----------
 def grabcut_fallback_bgra(input_bgr, iter_count=5):
+    """Fallback locale con GrabCut."""
     h, w = input_bgr.shape[:2]
     mask = np.zeros((h, w), np.uint8)
-    rect = (int(w * 0.05), int(h * 0.05), int(w * 0.9), int(h * 0.9))
+    rect = (1, 1, w - 2, h - 2)
+
     bgdModel = np.zeros((1, 65), np.float64)
     fgdModel = np.zeros((1, 65), np.float64)
     try:
@@ -58,106 +89,76 @@ def grabcut_fallback_bgra(input_bgr, iter_count=5):
         return None
 
 
-# ---------- Main (Modificato per Pulizia Maschera) ----------
-def remove_background_from_pil(pil_image, use_preprocess=True, resize_max=1024, grabcut_if_failed=True):
+def remove_background_from_pil(pil_image, api_key=None, resize_max=1024, grabcut_if_failed=True):
     """
-    Input: PIL Image
-    Output: (PIL Image in RGBA, metodo_usato) oppure (None, None)
+    Input: Immagine PIL
+    Output: (Immagine PIL RGBA, metodo_usato)
     """
     try:
+        if api_key is None:
+            api_key = os.getenv("REMOVE_BG_API_KEY")
+
         pil_image_rgb = _ensure_rgb(pil_image)
         pil_small, scale = _resize_for_speed(pil_image_rgb, max_dim=resize_max)
 
         out_small = None
         method_used = None
 
-        # ==========================================================
-        # STEP 1: Rimuovi sfondo con un modello di segmentazione (bordi netti)
-        # ==========================================================
-        try:
-            # Usiamo 'u2net' (o 'isnet-general-use') che è fatto per la segmentazione,
-            # non 'alpha_matting' che crea bordi sfumati/blurred.
-            out_small = remove(pil_small, model_name="u2net")
-            method_used = "rembg-u2net"
+        # 1. Tentativo API
+        if api_key:
+            try:
+                out_small = _call_remove_bg_api(pil_small, api_key)
+                if out_small:
+                    method_used = "api-remove-bg-commercial"
+            except Exception:
+                logger.exception("Errore chiamata API")
+                out_small = None
+        else:
+            logger.info("Nessuna API Key trovata, salto al fallback.")
 
-        except Exception:
-            logger.exception("rembg.remove ha sollevato un'eccezione")
-            out_small = None
-        # ==========================================================
-        # Fine STEP 1 Modificato
-        # ==========================================================
-
+        # Validazione risultato
         if out_small is not None:
             if out_small.mode != "RGBA":
                 out_small = out_small.convert("RGBA")
             alpha_check = np.array(out_small.split()[-1])
             if np.count_nonzero(alpha_check > 10) < 10:
-                logger.info("rembg ha prodotto alpha vuoto, passo al fallback")
                 out_small = None
+                method_used = None
 
-        # STEP 2: fallback GrabCut (Invariato)
-        # (Questo verrà usato solo se rembg fallisce completamente)
+        # 2. Tentativo Fallback
         if grabcut_if_failed and out_small is None:
-            logger.warning("rembg ha fallito, tentativo con GrabCut...")
+            logger.warning("Avvio GrabCut locale.")
             img_bgr = cv2.cvtColor(np.array(pil_small), cv2.COLOR_RGB2BGR)
-            if use_preprocess:
-                img_bgr = _auto_contrast_and_denoise_cv(img_bgr)
             bgra_small = grabcut_fallback_bgra(img_bgr)
+
             if bgra_small is not None:
                 out_small = Image.fromarray(cv2.cvtColor(bgra_small, cv2.COLOR_BGRA2RGBA))
-                method_used = "grabcut"
+                method_used = "grabcut-fallback"
 
         if out_small is None:
-            logger.error("Tutti i metodi di rimozione sfondo hanno fallito.")
             return None, None
 
-        # ==========================================================
-        # STEP 3: Pulizia aggressiva della Maschera
-        # ==========================================================
-        logger.info(f"Pulizia maschera prodotta da '{method_used}'...")
-
-        # Estrai la maschera alpha (potrebbe essere sfumata o sporca)
+        # Post-processing (Morphological Cleaning)
         alpha = np.array(out_small.split()[-1])
-
-        # 1. Binarizzazione: Trasforma i bordi sfumati (grigi) in bordi netti (bianco o nero)
         _, alpha_binary = cv2.threshold(alpha, 127, 255, cv2.THRESH_BINARY)
 
-        # 2. Pulizia Rumore: Rimuovi piccoli "detriti"
+        kernel_close = np.ones((7, 7), np.uint8)
+        alpha_closed = cv2.morphologyEx(alpha_binary, cv2.MORPH_CLOSE, kernel_close, iterations=2)
+
         kernel_open = np.ones((3, 3), np.uint8)
-        alpha_cleaned = cv2.morphologyEx(alpha_binary, cv2.MORPH_OPEN, kernel_open, iterations=2)
+        alpha_cleaned = cv2.morphologyEx(alpha_closed, cv2.MORPH_OPEN, kernel_open, iterations=1)
 
-        # 3. Chiusura Buchi: Riempi piccoli buchi *dentro* la gamba
-        kernel_close = np.ones((5, 5), np.uint8)
-        alpha_cleaned = cv2.morphologyEx(alpha_cleaned, cv2.MORPH_CLOSE, kernel_close, iterations=3)
+        out_small.putalpha(Image.fromarray(alpha_cleaned))
 
-        # 4. Trova il Contorno Più Grande: Isola la gamba
-        contours, _ = cv2.findContours(alpha_cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        final_alpha = np.zeros_like(alpha_cleaned)  # Crea una nuova maschera vuota
-
-        if contours:
-            main_contour = max(contours, key=cv2.contourArea)
-            # 5. Crea la Maschera Perfetta: Disegna solo la gamba (piena)
-            cv2.drawContours(final_alpha, [main_contour], -1, (255), cv2.FILLED)
-
-        # Applica la nuova maschera pulita all'immagine
-        out_small.putalpha(Image.fromarray(final_alpha))
-        # ==========================================================
-        # Fine STEP 3 Modificato
-        # ==========================================================
-
-        # STEP 4: resize back (Invariato)
-
+        # Ripristino dimensioni
         if scale != 1.0 and out_small is not None:
             orig_w, orig_h = pil_image.size
             out_full = out_small.resize((orig_w, orig_h), Image.LANCZOS)
         else:
             out_full = out_small
 
-        # Rimuoviamo il vecchio post-processing (Step 4), non ci serve più
-        logger.info(f"Rimozione sfondo completata con successo usando '{method_used}' (e pulizia maschera).")
         return out_full.convert("RGBA"), method_used
 
     except Exception:
-        logger.exception("Errore in remove_background_from_pil")
+        logger.exception("Errore critico in remove_background_from_pil")
         return None, None
