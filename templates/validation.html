@@ -45,7 +45,6 @@
                             </label>
                             <input type="range" class="form-range" id="opacitySlider" min="0" max="100" step="5"
                                    value="50">
-                            <small class="text-muted">Regola la trasparenza dell'immagine di riferimento</small>
                         </div>
                     </div>
                 </div>
@@ -61,8 +60,7 @@
                         <i class="bi bi-exclamation-triangle fs-3 text-warning"></i>
                         <h5 class="mt-2">Nessun Riferimento Caricato</h5>
                         <p class="text-muted small">
-                            Per avviare la validazione, devi prima caricare
-                            un'immagine di riferimento.
+                            Carica un'immagine di riferimento per iniziare.
                         </p>
                         <a href="/upload" class="btn btn-primary">
                             <i class="bi bi-upload me-1"></i> Carica Riferimento
@@ -99,41 +97,22 @@
                     <div class="mb-2">
                         <strong>SSIM:</strong>
                         <span id="ssimValue" class="badge bg-info">0%</span>
-                        <small class="text-muted d-block">Somiglianza strutturale</small>
                     </div>
                     <div class="mb-2">
                         <strong>MSE:</strong>
                         <span id="mseValue" class="badge bg-info">0%</span>
-                        <small class="text-muted d-block">Errore medio quadratico</small>
                     </div>
                     <div>
                         <strong>Template Match:</strong>
                         <span id="templateValue" class="badge bg-info">0%</span>
-                        <small class="text-muted d-block">Correlazione template</small>
                     </div>
-                </div>
-            </div>
-
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Istruzioni</h5>
-                </div>
-                <div class="card-body">
-                    <ol class="ps-3 mb-0">
-                        <li class="mb-2">Carica un'immagine di riferimento (pagina "Upload").</li>
-                        <li class="mb-2">Avvia la validazione per vedere la guida.</li>
-                        <li class="mb-2">Allinea la tua gamba all'immagine-guida.</li>
-                        <li>Raggiungi almeno 95% per un allineamento perfetto.</li>
-                    </ol>
                 </div>
             </div>
         </div>
     </div>
-
 {% endblock %}
 
 {% block scripts %}
-
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <script>
@@ -141,10 +120,12 @@
         let validationOverlayImage = null;
         let referenceMetadata = null;
         let overlayOpacity = 0.5;
+
+        let isCameraActive = false;
         let isValidating = false;
         let animationFrameId = null;
         let validationIntervalId = null;
-        let currentAccuracy = 0; // NUOVA VARIABILE
+        let currentAccuracy = 0;
 
         const video = document.getElementById('videoElement');
         const canvas = document.getElementById('overlayCanvas');
@@ -159,7 +140,6 @@
         const accuracyValue = document.getElementById('accuracyValue');
         const accuracyMessage = document.getElementById('accuracyMessage');
         const directionHint = document.getElementById('directionHint');
-
         const MAX_VIDEO_HEIGHT = 500;
 
         function adjustContainerToReference(imgWidth, imgHeight) {
@@ -203,29 +183,24 @@
                 try {
                     referenceMetadata = JSON.parse(storedMetadata);
                 } catch (e) {
-                    console.error("Errore parsing metadata:", e);
                     referenceMetadata = {};
                 }
-
-                console.log('📊 Metadata caricati:', referenceMetadata);
 
                 const referencePreview = document.getElementById('referencePreview');
                 if (referencePreview) {
                     const sensorBadge = referenceMetadata.sensorsFound !== undefined
-                        ? `<span class="badge bg-success ms-2"><i class="bi bi-bullseye"></i> ${referenceMetadata.sensorsFound} Sensori</span>`
+                        ? `<span class="badge bg-success ms-2">${referenceMetadata.sensorsFound} Sensori</span>`
                         : '';
-
                     const uploadDate = referenceMetadata.uploadDate
                         ? new Date(referenceMetadata.uploadDate).toLocaleString()
                         : 'N/A';
 
                     referencePreview.innerHTML = `
-                <div class="card-body">
-                    <img src="${storedOverlay}" class="img-fluid rounded mb-2"
-                         style="max-height: 200px; background: #333; border: 1px solid #444;">
-                    <p class="mb-1"><strong>Guida Overlay</strong> ${sensorBadge}</p>
-                    <p class="mb-0"><small class="text-muted">Caricato: ${uploadDate}</small></p>
-                </div>`;
+                        <div class="card-body">
+                            <img src="${storedOverlay}" class="img-fluid rounded mb-2" style="max-height: 200px; background: #333;">
+                            <p class="mb-1"><strong>Guida Overlay</strong> ${sensorBadge}</p>
+                            <p class="mb-0"><small class="text-muted">Caricato: ${uploadDate}</small></p>
+                        </div>`;
                 }
 
                 const referenceStatus = document.getElementById('referenceStatus');
@@ -237,21 +212,141 @@
                 validationOverlayImage.onload = () => {
                     adjustContainerToReference(validationOverlayImage.naturalWidth, validationOverlayImage.naturalHeight);
                     syncCanvasResolution();
+                    initCameraAndOverlay();
                 };
 
                 if (validationOverlayImage.complete && validationOverlayImage.naturalWidth > 0) {
                     adjustContainerToReference(validationOverlayImage.naturalWidth, validationOverlayImage.naturalHeight);
                     syncCanvasResolution();
+                    initCameraAndOverlay();
                 }
 
                 if (startBtn) startBtn.disabled = false;
-                showStatus('Riferimento caricato! Pronto per la validazione.', 'success');
                 return true;
             }
-            console.log('❌ Nessun riferimento trovato');
-            showStatus('Carica un\'immagine di riferimento per iniziare', 'warning');
             if (startBtn) startBtn.disabled = true;
             return false;
+        }
+
+        async function initCameraAndOverlay() {
+            if (isCameraActive) return;
+
+            const camStatus = document.getElementById('camStatus');
+            try {
+                if (!window.sensorApp) return;
+
+                const success = await window.sensorApp.initializeCameraWithAdaptiveResolution(
+                    null, validationOverlayImage
+                );
+
+                if (!success) {
+                    if (camStatus) {
+                        camStatus.textContent = 'Errore Accesso';
+                        camStatus.className = 'badge bg-danger';
+                    }
+                    return;
+                }
+
+                if (camStatus) {
+                    const settings = window.sensorApp.stream.getVideoTracks()[0].getSettings();
+                    camStatus.textContent = `Attiva (${settings.width}x${settings.height})`;
+                    camStatus.className = 'badge bg-success';
+                }
+
+                isCameraActive = true;
+                renderOverlay();
+            } catch (err) {
+                console.error(err);
+                if (camStatus) camStatus.textContent = 'Errore';
+            }
+        }
+
+        function renderOverlay() {
+            if (!isCameraActive || !video || !canvas || !ctx || !validationOverlayImage) {
+                animationFrameId = requestAnimationFrame(renderOverlay);
+                return;
+            }
+
+            syncCanvasResolution();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.globalAlpha = overlayOpacity;
+
+            const imgW = validationOverlayImage.naturalWidth;
+            const imgH = validationOverlayImage.naturalHeight;
+            const cw = canvas.width;
+            const ch = canvas.height;
+            let drawW, drawH, offsetX, offsetY;
+
+            if (imgW > 0 && imgH > 0) {
+                const imgAspect = imgW / imgH;
+                const canvasAspect = cw / ch;
+
+                if (canvasAspect > imgAspect) {
+                    drawH = ch;
+                    drawW = Math.round(drawH * imgAspect);
+                } else {
+                    drawW = cw;
+                    drawH = Math.round(drawW / imgAspect);
+                }
+                offsetX = Math.round((cw - drawW) / 2);
+                offsetY = Math.round((ch - drawH) / 2);
+
+                ctx.drawImage(validationOverlayImage, offsetX, offsetY, drawW, drawH);
+            }
+
+            if (isValidating && currentAccuracy >= 85 && referenceMetadata && referenceMetadata.sensors_data) {
+                ctx.globalAlpha = 1.0;
+                ctx.strokeStyle = '#00FF00';
+                ctx.lineWidth = 6;
+                ctx.shadowColor = '#00FF00';
+                ctx.shadowBlur = 15;
+
+                const scaleX = drawW / imgW;
+                const scaleY = drawH / imgH;
+
+                referenceMetadata.sensors_data.forEach(sensor => {
+                    const cx = offsetX + (sensor.x * scaleX);
+                    const cy = offsetY + (sensor.y * scaleY);
+                    const r = sensor.r * scaleX;
+
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#00FF00';
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.globalAlpha = 1.0;
+            if (isValidating) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(10, 10, 260, 60);
+                ctx.font = 'bold 16px Arial';
+
+                if (currentAccuracy >= 85) {
+                    ctx.fillStyle = '#00FF00';
+                    ctx.fillText('✓ POSIZIONE OK!', 20, 35);
+                } else {
+                    ctx.fillStyle = '#FF3333';
+                    ctx.fillText('Allinea il tuo arto...', 20, 35);
+                }
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '14px Arial';
+                ctx.fillText(`Accuratezza: ${Math.round(currentAccuracy)}%`, 20, 55);
+            } else {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(10, 10, 220, 30);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'italic 14px Arial';
+                ctx.fillText('Anteprima Posizionamento', 20, 30);
+            }
+
+            animationFrameId = requestAnimationFrame(renderOverlay);
         }
 
         function captureFrame() {
@@ -283,20 +378,58 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    currentAccuracy = result.accuracy || 0; // Aggiorna var globale per i cerchi verdi
+                    currentAccuracy = result.accuracy || 0;
                     updateAccuracyDisplay(result);
                     updateMetricsDisplay(result.metrics);
-                } else {
-                    console.error('Validation error:', result.error);
                 }
             } catch (error) {
-                console.error('Error validating frame:', error);
+                console.error(error);
+            }
+        }
+
+        function startValidationLogic() {
+            if (isValidating) return;
+            if (!cleanReferenceImage || !validationOverlayImage) return;
+
+            isValidating = true;
+            if (startBtn) startBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = false;
+
+            const validationStatus = document.getElementById('validationStatus');
+            if (validationStatus) {
+                validationStatus.textContent = 'Attivo';
+                validationStatus.className = 'badge bg-success';
+            }
+
+            validationIntervalId = setInterval(validateFrame, 500);
+        }
+
+        function stopValidationLogic() {
+            isValidating = false;
+            currentAccuracy = 0;
+
+            if (validationIntervalId) {
+                clearInterval(validationIntervalId);
+                validationIntervalId = null;
+            }
+
+            if (accuracyPanel) accuracyPanel.style.display = 'none';
+            const metricsCard = document.getElementById('metricsCard');
+            if (metricsCard) metricsCard.style.display = 'none';
+
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.disabled = true;
+
+            const validationStatus = document.getElementById('validationStatus');
+            if (validationStatus) {
+                validationStatus.textContent = 'Fermo';
+                validationStatus.className = 'badge bg-secondary';
             }
         }
 
         function updateAccuracyDisplay(result) {
             const accuracy = result.accuracy || 0;
-            const message = result.message || 'In elaborazione...';
+            const message = result.message || '...';
             const direction = result.direction;
 
             if (accuracyPanel) accuracyPanel.style.display = 'block';
@@ -335,194 +468,8 @@
             if (templateValue) templateValue.textContent = `${metrics.template_match || 0}%`;
         }
 
-        async function startValidation() {
-            if (isValidating) return;
-
-            if (!cleanReferenceImage || !validationOverlayImage) {
-                showStatus('Carica prima un\'immagine di riferimento!', 'error');
-                return;
-            }
-
-            const camStatus = document.getElementById('camStatus');
-
-            try {
-                if (!window.sensorApp) {
-                    console.error("ERRORE CRITICO: window.sensorApp non definito.");
-                    showStatus('Errore app (main.js mancante)', 'error');
-                    return;
-                }
-
-                if (!window.sensorApp.stream) {
-                    if (camStatus) {
-                        camStatus.textContent = 'Inizializzazione...';
-                        camStatus.className = 'badge bg-warning';
-                    }
-                    const success = await window.sensorApp.initializeCameraWithAdaptiveResolution(
-                        null, validationOverlayImage
-                    );
-                    if (!success) {
-                        showStatus('Errore fotocamera', 'error');
-                        if (camStatus) {
-                            camStatus.textContent = 'Errore';
-                            camStatus.className = 'badge bg-danger';
-                        }
-                        return;
-                    }
-                }
-
-                if (camStatus) {
-                    const settings = window.sensorApp.stream.getVideoTracks()[0].getSettings();
-                    camStatus.textContent = `Attiva (${settings.width}x${settings.height})`;
-                    camStatus.className = 'badge bg-success';
-                }
-
-            } catch (err) {
-                console.error("Errore init camera:", err);
-                showStatus('Errore fotocamera: ' + err.message, 'error');
-                return;
-            }
-
-            if (validationOverlayImage && validationOverlayImage.naturalWidth > 0) {
-                adjustContainerToReference(validationOverlayImage.naturalWidth, validationOverlayImage.naturalHeight);
-            }
-
-            isValidating = true;
-            if (startBtn) startBtn.disabled = true;
-            if (stopBtn) stopBtn.disabled = false;
-
-            const validationStatus = document.getElementById('validationStatus');
-            if (validationStatus) {
-                validationStatus.textContent = 'Attivo';
-                validationStatus.className = 'badge bg-success';
-            }
-
-            showStatus('Validazione attiva', 'info');
-            renderOverlay();
-            validationIntervalId = setInterval(validateFrame, 500);
-        }
-
-        function renderOverlay() {
-            if (!isValidating) {
-                if (animationFrameId) {
-                    cancelAnimationFrame(animationFrameId);
-                    animationFrameId = null;
-                }
-                return;
-            }
-
-            if (!video || !canvas || !ctx || !validationOverlayImage) {
-                animationFrameId = requestAnimationFrame(renderOverlay);
-                return;
-            }
-
-            syncCanvasResolution();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // 1. Disegna immagine base (con cerchi rossi fissi)
-            ctx.globalAlpha = overlayOpacity;
-
-            const imgW = validationOverlayImage.naturalWidth;
-            const imgH = validationOverlayImage.naturalHeight;
-            const cw = canvas.width;
-            const ch = canvas.height;
-            let drawW, drawH, offsetX, offsetY;
-
-            if (imgW > 0 && imgH > 0) {
-                const imgAspect = imgW / imgH;
-                const canvasAspect = cw / ch;
-
-                if (canvasAspect > imgAspect) {
-                    drawH = ch;
-                    drawW = Math.round(drawH * imgAspect);
-                } else {
-                    drawW = cw;
-                    drawH = Math.round(drawW / imgAspect);
-                }
-                offsetX = Math.round((cw - drawW) / 2);
-                offsetY = Math.round((ch - drawH) / 2);
-
-                ctx.drawImage(validationOverlayImage, offsetX, offsetY, drawW, drawH);
-            }
-
-            // 2. DISEGNA CERCHI VERDI SOPRA QUELLI ROSSI SE ACCURACY >= 85%
-            if (currentAccuracy >= 85 && referenceMetadata && referenceMetadata.sensors_data) {
-                ctx.globalAlpha = 1.0;
-
-                // Stile "Verde Elettrico" per coprire il rosso
-                ctx.strokeStyle = '#00FF00';
-                ctx.lineWidth = 6; // Spessore maggiorato
-                ctx.shadowColor = '#00FF00';
-                ctx.shadowBlur = 15; // Glow
-
-                const scaleX = drawW / imgW;
-                const scaleY = drawH / imgH;
-
-                referenceMetadata.sensors_data.forEach(sensor => {
-                    const cx = offsetX + (sensor.x * scaleX);
-                    const cy = offsetY + (sensor.y * scaleY);
-                    const r = sensor.r * scaleX;
-
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-                    ctx.stroke();
-
-                    // Centro verde
-                    ctx.fillStyle = '#00FF00';
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
-                    ctx.fill();
-                });
-                ctx.shadowBlur = 0; // Reset ombra
-            }
-
-            // 3. Testo Status su Canvas
-            ctx.globalAlpha = 1.0;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(10, 10, 260, 60);
-
-            ctx.font = 'bold 16px Arial';
-            if (currentAccuracy >= 85) {
-                ctx.fillStyle = '#00FF00';
-                ctx.fillText('✓ POSIZIONE OK!', 20, 35);
-            } else {
-                ctx.fillStyle = '#FF3333';
-                ctx.fillText('Allinea il tuo arto...', 20, 35);
-            }
-
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '14px Arial';
-            ctx.fillText(`Opacità: ${Math.round(overlayOpacity * 100)}%`, 20, 55);
-
-            animationFrameId = requestAnimationFrame(renderOverlay);
-        }
-
-        function stopValidation() {
-            isValidating = false;
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-            if (validationIntervalId) {
-                clearInterval(validationIntervalId);
-                validationIntervalId = null;
-            }
-            if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (accuracyPanel) accuracyPanel.style.display = 'none';
-            const metricsCard = document.getElementById('metricsCard');
-            if (metricsCard) metricsCard.style.display = 'none';
-
-            if (startBtn) startBtn.disabled = false;
-            if (stopBtn) stopBtn.disabled = true;
-            const validationStatus = document.getElementById('validationStatus');
-            if (validationStatus) {
-                validationStatus.textContent = 'Fermo';
-                validationStatus.className = 'badge bg-secondary';
-            }
-            showStatus('Validazione fermata', 'info');
-        }
-
-        if (startBtn) startBtn.addEventListener('click', startValidation);
-        if (stopBtn) stopBtn.addEventListener('click', stopValidation);
+        if (startBtn) startBtn.addEventListener('click', startValidationLogic);
+        if (stopBtn) stopBtn.addEventListener('click', stopValidationLogic);
 
         if (opacitySlider && opacityValue) {
             opacitySlider.addEventListener('input', (e) => {
@@ -538,7 +485,7 @@
                 if (validationOverlayImage && validationOverlayImage.naturalWidth > 0) {
                     adjustContainerToReference(validationOverlayImage.naturalWidth, validationOverlayImage.naturalHeight);
                     syncCanvasResolution();
-                    if (window.sensorApp && window.sensorApp.stream && !isValidating) {
+                    if (window.sensorApp && window.sensorApp.stream) {
                         await window.sensorApp.updateCameraResolution(validationOverlayImage);
                     }
                 } else {
@@ -548,28 +495,8 @@
             }, 500);
         });
 
-        function showStatus(message, type = 'info') {
-            const statusElement = document.getElementById('statusMessage');
-            if (statusElement) {
-                statusElement.textContent = message;
-                statusElement.className = `ms-3 text-${type}`;
-                setTimeout(() => {
-                    if (!isValidating) {
-                        statusElement.textContent = '';
-                        statusElement.className = 'ms-3';
-                    }
-                }, 3000);
-            }
-        }
-
         document.addEventListener('DOMContentLoaded', function () {
-            console.log('🚀 Init Page Validation...');
             const hasReference = loadReferenceFromStorage();
-            if (!hasReference && startBtn) startBtn.disabled = true;
-            else {
-                if (videoContainer) videoContainer.style.height = MAX_VIDEO_HEIGHT + 'px';
-                syncCanvasResolution();
-            }
             if (opacitySlider) overlayOpacity = parseInt(opacitySlider.value, 10) / 100;
             if (opacityValue) opacityValue.textContent = opacitySlider.value;
         });
