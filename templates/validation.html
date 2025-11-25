@@ -3,119 +3,120 @@
 {% block title %}Validazione Posizionamento - Sensor Validator{% endblock %}
 
 {% block content %}
-    <div class="row">
-        <div class="col-md-8">
-            <h2 class="mb-4">Validazione Posizionamento con Overlay</h2>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-            <div class="card">
-                <div class="card-body">
-                    <div class="video-container position-relative mb-3">
-                        <video id="videoElement" autoplay playsinline class="w-100 rounded"
-                               style="max-height: 500px;"></video>
+    <div class="lg:col-span-8">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-white tracking-tight">Validazione Live con Overlay</h2>
+            <span id="camStatus" class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">Non inizializzata</span>
+        </div>
 
-                        <canvas id="overlayCanvas" class="position-absolute top-0 start-0 w-100 h-100"
-                                style="pointer-events: none;"></canvas>
-                    </div>
+        <div class="bg-black rounded-2xl overflow-hidden shadow-2xl border border-[#2e3054] relative group">
+            <div class="video-container relative w-full bg-black aspect-video flex items-center justify-center">
+                <video id="videoElement" autoplay playsinline class="w-full h-full object-contain rounded"></video>
+                <canvas id="overlayCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
+            </div>
 
-                    <div class="accuracy-panel mb-3" id="accuracyPanel" style="display: none;">
-                        <div class="row align-items-center">
-                            <div class="col-md-4">
-                                <div class="accuracy-circle" id="accuracyCircle">
-                                    <span class="accuracy-value" id="accuracyValue">0%</span>
-                                </div>
-                            </div>
-                            <div class="col-md-8">
-                                <h5 class="mb-2">Allineamento</h5>
-                                <p class="mb-1 fw-bold" id="accuracyMessage">In attesa...</p>
-                                <p class="mb-0 text-muted" id="directionHint"></p>
-                            </div>
+            <div class="accuracy-panel hidden absolute top-4 right-4 bg-gradient-to-r from-indigo-900/90 to-purple-900/90 backdrop-blur-md p-4 rounded-xl border border-indigo-500/30 transition-all duration-300 z-10" id="accuracyPanel">
+                <div class="flex items-center gap-4">
+                    <div class="relative w-16 h-16 flex-shrink-0">
+                        <div class="accuracy-circle w-full h-full rounded-full border-4 flex items-center justify-center bg-black/30" id="accuracyCircle">
+                            <span class="text-sm font-bold text-white" id="accuracyValue">0%</span>
                         </div>
                     </div>
-
-                    <div class="controls mt-3">
-                        <button id="startBtn" class="btn btn-success">Avvia Validazione</button>
-                        <button id="stopBtn" class="btn btn-secondary" disabled>Ferma Validazione</button>
-                        <span id="statusMessage" class="ms-3"></span>
-                    </div>
-
-                    <div class="card mt-3">
-                        <div class="card-body">
-                            <label for="opacitySlider" class="form-label">
-                                Opacità Riferimento: <span id="opacityValue">50</span>%
-                            </label>
-                            <input type="range" class="form-range" id="opacitySlider" min="0" max="100" step="5"
-                                   value="50">
-                        </div>
+                    <div>
+                        <h5 class="text-indigo-200 text-xs uppercase tracking-wider font-semibold mb-1">Allineamento</h5>
+                        <p class="text-lg font-bold text-white leading-tight mb-1" id="accuracyMessage">...</p>
+                        <p class="text-yellow-300 text-xs font-medium" id="directionHint"></p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-4">
-            <h4 class="mb-3">Immagine di Riferimento</h4>
+        <div class="mt-6 flex flex-wrap gap-4 items-center bg-[#161831] p-4 rounded-xl border border-[#2e3054]">
+            <button id="startBtn" class="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg shadow-green-900/20 transition-all flex items-center gap-2">
+                <i class="bi bi-play-fill text-xl"></i> Avvia
+            </button>
+            <button id="stopBtn" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold shadow-lg shadow-red-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2" disabled>
+                <i class="bi bi-stop-fill text-xl"></i> Ferma
+            </button>
+            <span id="statusMessage" class="text-slate-400 text-sm ml-auto font-mono"></span>
+        </div>
 
-            <div id="referencePreview" class="card mb-3">
-                <div class="card-body text-center">
-                    <div class="py-3">
-                        <i class="bi bi-exclamation-triangle fs-3 text-warning"></i>
-                        <h5 class="mt-2">Nessun Riferimento Caricato</h5>
-                        <p class="text-muted small">
-                            Carica un'immagine di riferimento per iniziare.
-                        </p>
-                        <a href="/upload" class="btn btn-primary">
-                            <i class="bi bi-upload me-1"></i> Carica Riferimento
-                        </a>
-                    </div>
+        <div class="card mt-4 bg-[#161831] border border-[#2e3054] rounded-xl p-4">
+            <label for="opacitySlider" class="text-sm text-slate-300 mb-2 block">
+                Opacità Riferimento: <span id="opacityValue" class="text-indigo-400 font-bold">50</span>%
+            </label>
+            <input type="range" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" id="opacitySlider" min="0" max="100" step="5" value="50">
+        </div>
+    </div>
+
+    <div class="lg:col-span-4 space-y-6">
+
+        <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
+            <h4 class="text-white font-semibold mb-4 flex items-center gap-2">
+                <i class="bi bi-image text-indigo-400"></i> Immagine di Riferimento
+            </h4>
+            <div id="referencePreview">
+                <div class="text-center py-8 border-2 border-dashed border-slate-700 rounded-xl">
+                    <i class="bi bi-exclamation-triangle text-3xl text-yellow-600 mb-2 block"></i>
+                    <h5 class="text-white mt-2 font-medium">Nessun Riferimento</h5>
+                    <p class="text-slate-400 text-sm mb-4">Carica un'immagine per iniziare.</p>
+                    <a href="/upload" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition inline-flex items-center">
+                        <i class="bi bi-upload me-2"></i> Carica
+                    </a>
                 </div>
             </div>
+        </div>
 
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Statistiche</h5>
+        <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
+            <h5 class="text-white font-semibold mb-4 border-b border-[#2e3054] pb-2">Statistiche</h5>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center p-3 bg-[#0f1021] rounded-lg">
+                    <strong class="text-slate-400 text-sm">Validazione:</strong>
+                    <span id="validationStatus" class="text-xs px-2 py-1 rounded bg-slate-700 text-white">Fermo</span>
                 </div>
-                <div class="card-body">
-                    <div class="mb-2">
-                        <strong>Fotocamera:</strong>
-                        <span id="camStatus" class="badge bg-secondary">Non inizializzata</span>
-                    </div>
-                    <div class="mb-2">
-                        <strong>Validazione:</strong>
-                        <span id="validationStatus" class="badge bg-secondary">Fermo</span>
-                    </div>
-                    <div class="mb-2">
-                        <strong>Riferimento:</strong>
-                        <span id="referenceStatus" class="badge bg-secondary">Non caricato</span>
-                    </div>
+                <div class="flex justify-between items-center p-3 bg-[#0f1021] rounded-lg">
+                    <strong class="text-slate-400 text-sm">Riferimento:</strong>
+                    <span id="referenceStatus" class="text-xs px-2 py-1 rounded bg-slate-700 text-white">Non caricato</span>
                 </div>
             </div>
+        </div>
 
-            <div class="card mt-4" id="metricsCard" style="display: none;">
-                <div class="card-header">
-                    <h5 class="mb-0">Metriche Dettagliate</h5>
+        <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6 hidden" id="metricsCard">
+            <h5 class="text-white font-semibold mb-4 text-sm uppercase tracking-widest text-indigo-400">Metriche Dettagliate</h5>
+            <div class="space-y-2">
+                <div class="flex justify-between items-center bg-[#0f1021] p-2 rounded-lg">
+                    <strong class="text-slate-500 text-xs">SSIM</strong>
+                    <span id="ssimValue" class="text-indigo-400 font-mono font-bold">0%</span>
                 </div>
-                <div class="card-body">
-                    <div class="mb-2">
-                        <strong>SSIM:</strong>
-                        <span id="ssimValue" class="badge bg-info">0%</span>
-                    </div>
-                    <div class="mb-2">
-                        <strong>MSE:</strong>
-                        <span id="mseValue" class="badge bg-info">0%</span>
-                    </div>
-                    <div>
-                        <strong>Template Match:</strong>
-                        <span id="templateValue" class="badge bg-info">0%</span>
-                    </div>
+                <div class="flex justify-between items-center bg-[#0f1021] p-2 rounded-lg">
+                    <strong class="text-slate-500 text-xs">MSE</strong>
+                    <span id="mseValue" class="text-indigo-400 font-mono font-bold">0%</span>
+                </div>
+                <div class="flex justify-between items-center bg-[#0f1021] p-2 rounded-lg">
+                    <strong class="text-slate-500 text-xs">Match</strong>
+                    <span id="templateValue" class="text-indigo-400 font-mono font-bold">0%</span>
                 </div>
             </div>
         </div>
     </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
+    <style>
+        .accuracy-circle.excellent { border-color: #22c55e !important; color: #4ade80 !important; box-shadow: 0 0 15px rgba(34, 197, 94, 0.3); }
+        .accuracy-circle.good { border-color: #84cc16 !important; color: #a3e635 !important; }
+        .accuracy-circle.fair { border-color: #eab308 !important; color: #facc15 !important; }
+        .accuracy-circle.poor { border-color: #ef4444 !important; color: #f87171 !important; }
+        .accuracy-panel { display: none; } /* Default state controlled by JS */
+    </style>
+
     <script>
+        // --- LOGICA ORIGINALE ---
         let cleanReferenceImage = null;
         let validationOverlayImage = null;
         let referenceMetadata = null;
@@ -151,9 +152,9 @@
 
             videoContainer.style.width = parentWidth + 'px';
             videoContainer.style.height = desiredHeight + 'px';
+            // CSS classes handle layout, but inline styles from JS override them (kept for logic consistency)
             video.style.width = '100%';
             video.style.height = '100%';
-            video.style.objectFit = 'contain';
             canvas.style.width = '100%';
             canvas.style.height = '100%';
         }
@@ -189,24 +190,24 @@
                 const referencePreview = document.getElementById('referencePreview');
                 if (referencePreview) {
                     const sensorBadge = referenceMetadata.sensorsFound !== undefined
-                        ? `<span class="badge bg-success ms-2">${referenceMetadata.sensorsFound} Sensori</span>`
+                        ? `<span class="px-2 py-0.5 rounded bg-green-900 text-green-300 text-xs border border-green-700 ms-2">${referenceMetadata.sensorsFound} Sensori</span>`
                         : '';
                     const uploadDate = referenceMetadata.uploadDate
                         ? new Date(referenceMetadata.uploadDate).toLocaleString()
                         : 'N/A';
 
                     referencePreview.innerHTML = `
-                        <div class="card-body">
-                            <img src="${storedOverlay}" class="img-fluid rounded mb-2" style="max-height: 200px; background: #333;">
-                            <p class="mb-1"><strong>Guida Overlay</strong> ${sensorBadge}</p>
-                            <p class="mb-0"><small class="text-muted">Caricato: ${uploadDate}</small></p>
+                        <div class="text-center">
+                            <img src="${storedOverlay}" class="img-fluid rounded mb-2 border border-slate-600 bg-black/50 mx-auto" style="max-height: 200px;">
+                            <p class="mb-1 text-sm text-white font-medium">Overlay Attivo ${sensorBadge}</p>
+                            <p class="mb-0 text-xs text-slate-500">Caricato: ${uploadDate}</p>
                         </div>`;
                 }
 
                 const referenceStatus = document.getElementById('referenceStatus');
                 if (referenceStatus) {
                     referenceStatus.textContent = 'Caricato';
-                    referenceStatus.className = 'badge bg-success';
+                    referenceStatus.className = 'text-xs px-2 py-1 rounded bg-green-600 text-white';
                 }
 
                 validationOverlayImage.onload = () => {
@@ -215,6 +216,7 @@
                     initCameraAndOverlay();
                 };
 
+                // Fallback if cached
                 if (validationOverlayImage.complete && validationOverlayImage.naturalWidth > 0) {
                     adjustContainerToReference(validationOverlayImage.naturalWidth, validationOverlayImage.naturalHeight);
                     syncCanvasResolution();
@@ -242,7 +244,7 @@
                 if (!success) {
                     if (camStatus) {
                         camStatus.textContent = 'Errore Accesso';
-                        camStatus.className = 'badge bg-danger';
+                        camStatus.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-red-900 text-red-200 border border-red-700';
                     }
                     return;
                 }
@@ -250,7 +252,7 @@
                 if (camStatus) {
                     const settings = window.sensorApp.stream.getVideoTracks()[0].getSettings();
                     camStatus.textContent = `Attiva (${settings.width}x${settings.height})`;
-                    camStatus.className = 'badge bg-success';
+                    camStatus.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-green-900 text-green-200 border border-green-700';
                 }
 
                 isCameraActive = true;
@@ -295,6 +297,7 @@
                 ctx.drawImage(validationOverlayImage, offsetX, offsetY, drawW, drawH);
             }
 
+            // Draw Green circles on high accuracy
             if (isValidating && currentAccuracy >= 85 && referenceMetadata && referenceMetadata.sensors_data) {
                 ctx.globalAlpha = 1.0;
                 ctx.strokeStyle = '#00FF00';
@@ -322,6 +325,7 @@
                 ctx.shadowBlur = 0;
             }
 
+            // Canvas Text UI
             ctx.globalAlpha = 1.0;
             if (isValidating) {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -338,12 +342,6 @@
                 ctx.fillStyle = '#ffffff';
                 ctx.font = '14px Arial';
                 ctx.fillText(`Accuratezza: ${Math.round(currentAccuracy)}%`, 20, 55);
-            } else {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                ctx.fillRect(10, 10, 220, 30);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'italic 14px Arial';
-                ctx.fillText('Anteprima Posizionamento', 20, 30);
             }
 
             animationFrameId = requestAnimationFrame(renderOverlay);
@@ -398,7 +396,7 @@
             const validationStatus = document.getElementById('validationStatus');
             if (validationStatus) {
                 validationStatus.textContent = 'Attivo';
-                validationStatus.className = 'badge bg-success';
+                validationStatus.className = 'text-xs px-2 py-1 rounded bg-green-600 text-white';
             }
 
             validationIntervalId = setInterval(validateFrame, 500);
@@ -413,9 +411,9 @@
                 validationIntervalId = null;
             }
 
-            if (accuracyPanel) accuracyPanel.style.display = 'none';
+            if (accuracyPanel) accuracyPanel.style.display = 'none'; // Using standard JS style, matched by CSS
             const metricsCard = document.getElementById('metricsCard');
-            if (metricsCard) metricsCard.style.display = 'none';
+            if (metricsCard) metricsCard.classList.add('hidden'); // Tailwind class
 
             if (startBtn) startBtn.disabled = false;
             if (stopBtn) stopBtn.disabled = true;
@@ -423,7 +421,7 @@
             const validationStatus = document.getElementById('validationStatus');
             if (validationStatus) {
                 validationStatus.textContent = 'Fermo';
-                validationStatus.className = 'badge bg-secondary';
+                validationStatus.className = 'text-xs px-2 py-1 rounded bg-slate-700 text-white';
             }
         }
 
@@ -435,8 +433,9 @@
             if (accuracyPanel) accuracyPanel.style.display = 'block';
             if (accuracyValue) accuracyValue.textContent = `${Math.round(accuracy)}%`;
 
+            // Reset classes
             if (accuracyCircle) {
-                accuracyCircle.className = 'accuracy-circle';
+                accuracyCircle.classList.remove('excellent', 'good', 'fair', 'poor');
                 if (accuracy >= 95) accuracyCircle.classList.add('excellent');
                 else if (accuracy >= 90) accuracyCircle.classList.add('good');
                 else if (accuracy >= 80) accuracyCircle.classList.add('fair');
@@ -462,7 +461,7 @@
             const mseValue = document.getElementById('mseValue');
             const templateValue = document.getElementById('templateValue');
 
-            if (metricsCard) metricsCard.style.display = 'block';
+            if (metricsCard) metricsCard.classList.remove('hidden');
             if (ssimValue) ssimValue.textContent = `${metrics.ssim || 0}%`;
             if (mseValue) mseValue.textContent = `${metrics.mse || 0}%`;
             if (templateValue) templateValue.textContent = `${metrics.template_match || 0}%`;
@@ -501,125 +500,4 @@
             if (opacityValue) opacityValue.textContent = opacitySlider.value;
         });
     </script>
-
-    <style>
-        .video-container {
-            position: relative;
-            display: inline-block;
-            width: 100%;
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            height: 500px;
-        }
-
-        #overlayCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            pointer-events: none;
-            width: 100%;
-            height: 100%;
-        }
-
-        #videoElement {
-            display: block;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-
-        .controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
-        }
-
-        .accuracy-panel {
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            color: white;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .accuracy-circle {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto;
-            font-size: 28px;
-            font-weight: bold;
-            border: 8px solid rgba(255, 255, 255, 0.3);
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-        }
-
-        .accuracy-circle.excellent {
-            border-color: #00ff00;
-            background: rgba(0, 255, 0, 0.2);
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-        }
-
-        .accuracy-circle.good {
-            border-color: #90ee90;
-            background: rgba(144, 238, 144, 0.2);
-            box-shadow: 0 0 20px rgba(144, 238, 144, 0.4);
-        }
-
-        .accuracy-circle.fair {
-            border-color: #ffa500;
-            background: rgba(255, 165, 0, 0.2);
-            box-shadow: 0 0 20px rgba(255, 165, 0, 0.4);
-        }
-
-        .accuracy-circle.poor {
-            border-color: #ff6b6b;
-            background: rgba(255, 107, 107, 0.2);
-            box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
-        }
-
-        .accuracy-value {
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-        }
-
-        #accuracyMessage {
-            font-size: 1.2em;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-        }
-
-        #directionHint {
-            font-size: 1.1em;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 8px 12px;
-            border-radius: 6px;
-            display: inline-block;
-        }
-
-        @media (max-width: 768px) {
-            .controls {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .controls .btn {
-                width: 100%;
-            }
-
-            .accuracy-circle {
-                width: 100px;
-                height: 100px;
-                font-size: 24px;
-            }
-        }
-    </style>
 {% endblock %}
