@@ -48,22 +48,14 @@
                     </div>
                 </div>
 
-                <div id="stepSuccessOverlay"
-                     class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-20">
-                    <div class="text-center transform transition-all scale-110">
-                        <i class="bi bi-check-circle-fill text-6xl text-green-500 mb-4 inline-block shadow-green-500 drop-shadow-lg"></i>
-                        <h3 class="text-3xl font-bold text-white">Step Completato!</h3>
-                    </div>
-                </div>
-
                 <div id="finalSuccessOverlay"
-                     class="hidden absolute inset-0 bg-gradient-to-b from-black/80 to-green-900/40 backdrop-blur-md flex items-center justify-center z-30">
-                    <div class="text-center p-8 bg-[#161831] border border-green-500/50 rounded-2xl shadow-2xl">
-                        <i class="bi bi-trophy-fill text-6xl text-yellow-400 mb-4 inline-block"></i>
-                        <h3 class="text-3xl font-bold text-white">Validazione Terminata!</h3>
-                        <p class="text-slate-300 mt-4 mb-6">Tutti i sensori sono stati posizionati correttamente.</p>
+                     class="hidden absolute inset-0 bg-gradient-to-b from-black/90 to-green-900/60 backdrop-blur-md flex items-center justify-center z-30">
+                    <div class="text-center p-8 bg-[#161831] border border-green-500/50 rounded-2xl shadow-2xl transform scale-110">
+                        <i class="bi bi-trophy-fill text-6xl text-yellow-400 mb-4 inline-block drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]"></i>
+                        <h3 class="text-3xl font-bold text-white">Validazione Terminata</h3>
+                        <p class="text-slate-300 mt-4 mb-6">Sessione conclusa manualmente.</p>
                         <button onclick="location.reload()"
-                                class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition">
+                                class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition">
                             Nuova Sessione
                         </button>
                     </div>
@@ -145,11 +137,14 @@
 
         let currentStep = 1;
         let totalSteps = 1;
-        let currentAccuracy = 0;
+
+        // NUOVE VARIABILI PER SMOOTHING
+        let targetAccuracy = 0;
+        let displayedAccuracy = 0;
+
         let lockTimer = 0;
         const LOCK_THRESHOLD = 85;
         const LOCK_DURATION = 1500;
-        let lastFrameTime = 0;
         let sensorsRealtimeStatus = {};
 
         const video = document.getElementById('videoElement');
@@ -168,7 +163,6 @@
             const skipBtn = document.getElementById('skipGroupBtn');
             if (skipBtn) skipBtn.onclick = () => nextStep();
 
-            // UPLOAD HANDLER INTERCEPT
             const uploadLink = document.querySelector('a[href="/upload"]');
             if (uploadLink) {
                 uploadLink.onclick = (e) => {
@@ -180,8 +174,12 @@
                     input.click();
                 };
             }
+
+            // AVVIA ANIMAZIONE SMOOTHING
+            requestAnimationFrame(animateValues);
         });
 
+        // --- GESTIONE UPLOAD ---
         async function handleFileUpload(file) {
             if (!file) return;
             const formData = new FormData();
@@ -197,7 +195,6 @@
                     localStorage.setItem('validationOverlayImage', `data:image/png;base64,${data.drawing_overlay_image}`);
                     localStorage.setItem('referenceMetadata', JSON.stringify(data));
 
-                    // Reload internal vars
                     cleanReferenceImage = new Image();
                     cleanReferenceImage.src = `data:image/png;base64,${data.reference_image}`;
                     validationOverlayImage = new Image();
@@ -208,7 +205,6 @@
                     const listLen = data.sensors_data ? Math.ceil(data.sensors_data.length / 2) : 1;
                     totalSteps = Math.max(dictLen, listLen, data.total_steps || 1);
 
-                    // Update UI
                     document.getElementById('totalStepsDisp').innerText = totalSteps;
                     document.getElementById('sessionTotalSteps').innerText = totalSteps;
                     document.getElementById('referencePreview').innerHTML = `<img src="${validationOverlayImage.src}" class="w-3/4 mx-auto rounded border border-slate-600">`;
@@ -270,6 +266,29 @@
             requestAnimationFrame(drawLoop);
         }
 
+        // --- ANIMAZIONE FLUIDA VALORI ---
+        function animateValues() {
+            if (Math.abs(targetAccuracy - displayedAccuracy) > 0.5) {
+                // Interpolazione: si avvicina al target del 10% ogni frame (effetto fluido)
+                displayedAccuracy += (targetAccuracy - displayedAccuracy) * 0.1;
+            } else {
+                displayedAccuracy = targetAccuracy;
+            }
+
+            // Aggiorna UI
+            const finalVal = Math.round(displayedAccuracy);
+            const accValEl = document.getElementById('accuracyValue');
+            if (accValEl) accValEl.innerText = finalVal + '%';
+
+            // Aggiorna anello progresso
+            const progress = Math.min(finalVal / 100, 1);
+            const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
+            const ring = document.getElementById('lockProgressRing');
+            if (ring) ring.style.strokeDashoffset = offset;
+
+            requestAnimationFrame(animateValues);
+        }
+
         function startValidation() {
             if (!isCameraActive) return;
             isValidating = true;
@@ -290,6 +309,8 @@
             document.getElementById('accuracyPanel').classList.add('hidden');
             document.getElementById('stepStatus').classList.add('hidden');
             document.getElementById('skipGroupBtn').classList.add('hidden');
+
+            document.getElementById('finalSuccessOverlay').classList.remove('hidden');
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         }
@@ -318,8 +339,9 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    currentAccuracy = data.accuracy;
-                    document.getElementById('accuracyValue').innerText = Math.round(data.accuracy) + '%';
+                    // ASSEGNA AL TARGET PER ANIMAZIONE FLUIDA
+                    targetAccuracy = data.accuracy;
+
                     document.getElementById('accuracyMessage').innerText = data.message;
                     document.getElementById('accuracyPanel').classList.remove('hidden');
 
@@ -327,13 +349,20 @@
                         data.sensors_status.forEach(s => sensorsRealtimeStatus[s.id] = s.present);
                     }
 
-                    if (currentAccuracy >= LOCK_THRESHOLD) {
+                    // AVANZAMENTO STEP: Solo se blocchiamo il timer, ma l'utente ha chiesto manuale
+                    // Qui gestiamo solo il timer visivo (lock) se volessimo auto-next, ma per ora NO.
+                    // (Timer resettato sempre a 0 per modalità 100% manuale se richiesto,
+                    // oppure lasciato qui per l'effetto visivo di "completamento" senza cambio step)
+                    if (displayedAccuracy >= LOCK_THRESHOLD) {
                         lockTimer += 500;
-                        if (lockTimer >= LOCK_DURATION) nextStep();
+                        if (lockTimer >= LOCK_DURATION) {
+                            // nextStep(); // DISABILITATO PER RICHIESTA CONTROLLO MANUALE
+                            // Se vuoi che avanzi da solo, togli il commento sopra.
+                            // Altrimenti resta fermo qui.
+                        }
                     } else {
                         lockTimer = 0;
                     }
-                    updateLockRing();
                 }
             } catch (e) {
                 console.error(e);
@@ -342,16 +371,14 @@
 
         function nextStep() {
             lockTimer = 0;
-            document.getElementById('stepSuccessOverlay').classList.remove('hidden');
-            setTimeout(() => {
-                document.getElementById('stepSuccessOverlay').classList.add('hidden');
-                currentStep++;
-                if (currentStep > totalSteps) {
-                    stopValidation();
-                    document.getElementById('finalSuccessOverlay').classList.remove('hidden');
-                }
+            currentStep++;
+            if (currentStep > totalSteps) {
+                isValidating = false;
+                clearInterval(validationIntervalId);
+                document.getElementById('accuracyMessage').innerText = "Finito. Premi STOP.";
+            } else {
                 updateUI();
-            }, 1000);
+            }
         }
 
         function drawLoop() {
@@ -366,6 +393,9 @@
             if (isValidating && stepsConfig) {
                 const scale = dims.w / validationOverlayImage.naturalWidth;
 
+                // LOGICA NEON VISIVA: Se la percentuale visualizzata è > 85%, TUTTO VERDE.
+                const isGlobalSuccess = displayedAccuracy >= 85;
+
                 Object.keys(stepsConfig).forEach(stepKey => {
                     const stepNum = parseInt(stepKey);
                     const sensorsInStep = stepsConfig[stepKey];
@@ -376,45 +406,56 @@
                         const r = s.r * scale;
                         const isPresent = sensorsRealtimeStatus[s.id];
 
-                        ctx.lineWidth = 3;
+                        ctx.lineWidth = 5; // Spessore aumentato per visibilità
 
                         if (stepNum < currentStep) {
-                            ctx.globalAlpha = 0.6;
+                            ctx.globalAlpha = 0.7;
                             ctx.strokeStyle = '#22c55e';
+                            ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
                             ctx.beginPath();
                             ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                            ctx.fill();
                             ctx.stroke();
                             ctx.fillStyle = '#fff';
-                            ctx.font = '20px Arial';
-                            ctx.fillText("✓", cx - 6, cy + 6);
+                            ctx.font = 'bold 20px Arial';
+                            ctx.fillText("✓", cx - 7, cy + 7);
                         } else if (stepNum === currentStep) {
                             ctx.globalAlpha = 1.0;
-                            if (isPresent) {
-                                ctx.strokeStyle = '#4ade80';
-                                ctx.shadowBlur = 15;
-                                ctx.shadowColor = '#4ade80';
+
+                            // VISUALIZZAZIONE: Verde se presente fisicamente O se successo globale
+                            if (isPresent || isGlobalSuccess) {
+                                // STILE NEON VERDE ACCESO
+                                ctx.shadowBlur = 30; // Glow molto forte
+                                ctx.shadowColor = '#00FF00'; // Verde Neon puro
+                                ctx.strokeStyle = '#00FF00';
+                                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Tint interno
+
+                                ctx.beginPath();
+                                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                                ctx.fill();
+                                ctx.stroke();
+
+                                ctx.shadowBlur = 0;
+                                ctx.fillStyle = '#fff';
+                                ctx.font = 'bold 16px Arial';
+                                ctx.fillText(s.id, cx - 5, cy + 5);
                             } else {
-                                const pulse = 1 + Math.sin(Date.now() / 200) * 0.1;
-                                ctx.strokeStyle = '#ef4444';
-                                ctx.shadowBlur = 20;
-                                ctx.shadowColor = '#ef4444';
-                                r_pulse = r * pulse;
+                                // STILE ROSSO
+                                const pulse = 1 + Math.sin(Date.now() / 150) * 0.15;
+                                ctx.strokeStyle = '#FF0000';
+                                ctx.shadowBlur = 25;
+                                ctx.shadowColor = '#FF0000';
+                                const r_pulse = r * pulse;
                                 ctx.beginPath();
                                 ctx.arc(cx, cy, r_pulse, 0, Math.PI * 2);
                                 ctx.stroke();
-                                ctx.font = 'bold 12px Arial';
-                                ctx.fillStyle = '#ef4444';
-                                ctx.fillText("MANCA", cx - 20, cy - r - 5);
-                                return;
+                                ctx.shadowBlur = 0;
+                                ctx.fillStyle = '#FF0000';
+                                ctx.font = 'bold 14px Arial';
+                                ctx.fillText("MANCA", cx - 25, cy - r - 10);
                             }
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                            ctx.stroke();
-                            ctx.shadowBlur = 0;
-                            ctx.fillStyle = '#fff';
-                            ctx.fillText(s.id, cx - 4, cy + 4);
                         } else {
-                            ctx.globalAlpha = 0.2;
+                            ctx.globalAlpha = 0.3;
                             ctx.strokeStyle = '#94a3b8';
                             ctx.beginPath();
                             ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -431,12 +472,6 @@
             document.getElementById('currentStepDisp').innerText = safeStep;
             const pct = ((safeStep - 1) / totalSteps) * 100;
             document.getElementById('progressBar').style.width = pct + '%';
-        }
-
-        function updateLockRing() {
-            const progress = Math.min(lockTimer / LOCK_DURATION, 1);
-            const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
-            document.getElementById('lockProgressRing').style.strokeDashoffset = offset;
         }
 
         function getDrawDimensions() {
