@@ -15,7 +15,7 @@ class ValidationService:
     def __init__(self):
         self.sessions: Dict[str, Dict] = {}
         self.STEP_SIZE = 2
-        print("✅ ValidationService: STABLE MATH MODE (40% Sim + 30% Center + 30% Sensors)")
+        print("✅ ValidationService: SMART DETECTION (Shape + Color Verification)")
 
     def handle_reference_upload(self, request) -> Dict:
         try:
@@ -29,6 +29,7 @@ class ValidationService:
             image_input = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
             if image_input is None: return {'success': False, 'error': 'Errore decodifica'}
 
+            # Gestione RGBA/Background
             image_bgra = None
             if image_input.ndim == 3 and image_input.shape[2] == 4:
                 image_bgra = image_input
@@ -46,14 +47,15 @@ class ValidationService:
 
             image_bgr_clean = image_bgra[:, :, :3].copy()
 
+            # --- RILEVAMENTO INTELLIGENTE ---
             annotated_image, contours, steps_config, drawing_overlay = self._find_contours_and_steps(image_bgra)
 
             total_steps = len(steps_config)
             sensors_count = sum(len(v) for v in steps_config.values())
-
             flat_sensors = []
             for k, v in steps_config.items(): flat_sensors.extend(v)
 
+            # Salvataggio immagini debug
             upload_folder = 'uploads'
             os.makedirs(upload_folder, exist_ok=True)
             ref_path = os.path.join(upload_folder, f"{session_id}_reference.png")
@@ -76,7 +78,7 @@ class ValidationService:
 
             return {
                 'success': True,
-                'message': f'OK: {sensors_count} sensori.',
+                'message': f'Rilevati {sensors_count} sensori validi.',
                 'session_id': session_id,
                 'reference_image': to_b64(image_bgr_clean),
                 'annotated_image': to_b64(annotated_image) if annotated_image is not None else "",
@@ -85,7 +87,6 @@ class ValidationService:
                 'steps_config': steps_config,
                 'sensors_data': flat_sensors
             }
-
         except Exception as e:
             logger.error(f"Upload error: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
@@ -95,12 +96,14 @@ class ValidationService:
         alpha_mask = image_bgra[:, :, 3]
         h, w = image_bgra.shape[:2]
 
+        # Maschera per ignorare angoli (rumore UI)
         y_end, x_end = int(h * 0.08), int(w * 0.20)
         annotated_image[0:y_end, 0:x_end] = 0
         alpha_mask[0:y_end, 0:x_end] = 0
 
         drawing_overlay = np.zeros((h, w, 4), dtype=np.uint8)
 
+        # Trova contorno gamba
         _, thresh = cv2.threshold(alpha_mask, 10, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if contours:
@@ -108,12 +111,14 @@ class ValidationService:
             cv2.drawContours(annotated_image, [main_cnt], -1, (0, 255, 0), 2)
             cv2.drawContours(drawing_overlay, [main_cnt], -1, (0, 255, 0, 255), 2)
 
+        # Rilevamento Cerchi
         gray = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2GRAY)
         gray_filtered = cv2.medianBlur(gray, 5)
 
+        # Param2 alzato leggermente (30 -> 35) per ridurre falsi positivi geometrici
         circles = cv2.HoughCircles(
             gray_filtered, cv2.HOUGH_GRADIENT, dp=1.2,
-            minDist=70, param1=50, param2=35, minRadius=22, maxRadius=65
+            minDist=60, param1=50, param2=35, minRadius=15, maxRadius=55
         )
 
         valid_sensors = []
@@ -125,12 +130,19 @@ class ValidationService:
                 x2, y2 = min(w, x + r), min(h, y + r)
                 roi = annotated_image[y1:y2, x1:x2]
                 if roi.size == 0: continue
-                mean, std_dev = cv2.meanStdDev(roi)
-                contrast = np.mean(std_dev)
-                if contrast > 10.0: valid_sensors.append((x, y, r))
 
-            valid_sensors = self._remove_overlapping_circles(valid_sensors, min_dist=60)
+                # --- FIX CRUCIALE: FILTRO COLORE ---
+                # Non basta che sia rotondo. Deve avere i colori del sensore.
+                if self._check_color_signature(roi):
+                    valid_sensors.append((x, y, r))
+                else:
+                    # Debug visivo: Disegna in Giallo i cerchi scartati (opzionale)
+                    # cv2.circle(annotated_image, (x, y), r, (0, 255, 255), 1)
+                    pass
 
+            valid_sensors = self._remove_overlapping_circles(valid_sensors, min_dist=50)
+
+        # Ordinamento e creazione Step
         valid_sensors = sorted(valid_sensors, key=lambda val: val[1])
         steps_config = {}
         current_step = 1
@@ -141,23 +153,59 @@ class ValidationService:
             for idx_in_chunk, (x, y, r) in enumerate(chunk):
                 sensor_global_id = i + idx_in_chunk + 1
 
+                # Disegno finale (Cerchi rossi confermati)
                 cv2.circle(annotated_image, (x, y), r, (0, 0, 255), 3)
                 cv2.circle(drawing_overlay, (x, y), r, (0, 0, 255, 255), 3)
+
                 cv2.rectangle(annotated_image, (x - 10, y - 10), (x + 15, y + 10), (0, 0, 255), -1)
                 cv2.putText(annotated_image, str(sensor_global_id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                             (255, 255, 255), 2)
                 cv2.putText(drawing_overlay, str(sensor_global_id), (x - 5, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                             (255, 255, 255), 2)
 
-                step_sensors.append({
-                    'id': int(sensor_global_id), 'step': int(current_step),
-                    'x': int(x), 'y': int(y), 'r': int(r)
-                })
+                step_sensors.append(
+                    {'id': int(sensor_global_id), 'step': int(current_step), 'x': int(x), 'y': int(y), 'r': int(r)})
 
             steps_config[str(current_step)] = step_sensors
             current_step += 1
 
         return annotated_image, contours, steps_config, drawing_overlay
+
+    def _check_color_signature(self, roi: np.ndarray) -> bool:
+        """
+        Controlla se la ROI contiene i colori specifici del sensore (Azzurro/Grigio/Bianco).
+        Serve a scartare falsi positivi sulla pelle.
+        """
+        try:
+            hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+
+            # 1. AZZURRO (Gel)
+            lower_cyan = np.array([75, 20, 70])
+            upper_cyan = np.array([145, 255, 255])
+            mask_cyan = cv2.inRange(hsv, lower_cyan, upper_cyan)
+
+            # 2. GRIGIO (Bottone)
+            lower_grey = np.array([0, 0, 50])
+            upper_grey = np.array([180, 50, 220])  # Sat max bassa per evitare pelle arrossata
+            mask_grey = cv2.inRange(hsv, lower_grey, upper_grey)
+
+            # 3. BIANCO (Bordo)
+            lower_white = np.array([0, 0, 160])
+            upper_white = np.array([180, 60, 255])
+            mask_white = cv2.inRange(hsv, lower_white, upper_white)
+
+            combined_mask = cv2.bitwise_or(mask_cyan, mask_grey)
+            combined_mask = cv2.bitwise_or(combined_mask, mask_white)
+
+            non_zero = cv2.countNonZero(combined_mask)
+            total_pixels = roi.shape[0] * roi.shape[1]
+
+            # Deve avere almeno il 5% di pixel "Sensor-Like" per essere accettato
+            # La pelle normale avrà quasi 0% su queste maschere specifiche.
+            return (non_zero / total_pixels) > 0.05
+
+        except Exception:
+            return False
 
     def _remove_overlapping_circles(self, circles, min_dist):
         if not circles: return []
@@ -173,28 +221,7 @@ class ValidationService:
             if not is_overlap: clean.append(c)
         return clean
 
-    def _verify_sensor_presence_strict(self, frame: np.ndarray, x: int, y: int, r: int) -> bool:
-        """ LIVE CHECK: Permissivo """
-        try:
-            h, w = frame.shape[:2]
-            margin = int(r * 0.9)
-            x1, y1 = max(0, x - r - margin), max(0, y - r - margin)
-            x2, y2 = min(w, x + r + margin), min(h, y + r + margin)
-            roi = frame[y1:y2, x1:x2]
-            if roi.size == 0: return False
-
-            hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-            lower_blue = np.array([70, 15, 20])
-            upper_blue = np.array([160, 255, 255])
-            lower_white = np.array([0, 0, 40])
-            upper_white = np.array([180, 90, 255])
-
-            mask = cv2.inRange(hsv, lower_blue, upper_blue) + cv2.inRange(hsv, lower_white, upper_white)
-            return (cv2.countNonZero(mask) / (roi.shape[0] * roi.shape[1])) > 0.02
-
-        except Exception:
-            return False
-
+    # --- VALIDAZIONE LIVE (User Experience Mode) ---
     def validate_current_frame(self, request) -> Dict:
         try:
             data = request.get_json()
@@ -204,130 +231,121 @@ class ValidationService:
             current_step_req = str(data.get('current_step', 1))
 
             if not ref_b64 or not curr_b64: return {'success': False, 'error': 'No data'}
-
             ref_img = self._decode_base64_image(ref_b64)
             curr_img = self._decode_base64_image(curr_b64)
             if ref_img is None or curr_img is None: return {'success': False, 'error': 'Img Err'}
 
             steps_config = self.sessions.get(session_id, {}).get('steps_config', {})
 
-            # --- 1. Calcolo GEOMETRIA (Match Template) ---
-            # Questo dice quanto l'immagine assomiglia al riferimento
+            # 1. GEOMETRIA (SSIM Boosted)
             sim_res = self.calculate_image_similarity(ref_img, curr_img)
-            similarity_score = sim_res['combined_accuracy']  # 0-100
+            raw_ssim = sim_res['raw_ssim']
 
-            # --- 2. Calcolo CENTRATURA (Offset) ---
-            # Se la gamba è al bordo, il punteggio deve scendere
-            centering_score = self.calculate_centering_score(sim_res['offset_x'], sim_res['offset_y'])
+            if raw_ssim >= 50:
+                alignment_score = 90 + ((raw_ssim - 50) * 0.2)
+            elif raw_ssim >= 30:
+                alignment_score = 75 + ((raw_ssim - 30) / 20 * 15)
+            else:
+                alignment_score = raw_ssim * 2
 
-            # --- 3. Calcolo SENSORI ---
+            # 2. SENSORI
             sensors_status = []
             target_sensors = steps_config.get(current_step_req, [])
             present_cnt = 0
-
             scale_x = curr_img.shape[1] / ref_img.shape[1]
             scale_y = curr_img.shape[0] / ref_img.shape[0]
 
             for step_key, s_list in steps_config.items():
-                is_curr = (str(step_key) == current_step_req)
+                is_curr_step = (str(step_key) == current_step_req)
                 for s in s_list:
                     sx, sy, sr = int(s['x'] * scale_x), int(s['y'] * scale_y), int(s['r'] * scale_x)
-
-                    is_present = self._verify_sensor_presence_strict(curr_img, sx, sy, sr)
-
+                    # Usiamo la stessa logica colore per la validazione
+                    is_present = self._check_sensor_presence_live(curr_img, sx, sy, sr)
                     sensors_status.append({'id': s['id'], 'step': int(step_key), 'present': is_present})
-                    if is_curr and is_present: present_cnt += 1
+                    if is_curr_step and is_present: present_cnt += 1
 
             total_targets = len(target_sensors)
             sensors_score = (present_cnt / total_targets * 100.0) if total_targets > 0 else 100.0
 
-            # --- FORMULA DI STABILITA' ---
-            # 40% Somiglianza Immagine (È la gamba giusta?)
-            # 30% Centratura (È nel posto giusto?)
-            # 30% Sensori (Ci sono i cerchi?)
-
-            final_acc = (similarity_score * 0.40) + (centering_score * 0.30) + (sensors_score * 0.30)
-
-            # Cap di sicurezza: Se non vedo la gamba (similarity < 50), il voto è 0.
-            if similarity_score < 50.0:
-                final_acc = 0.0
-
-            msg = ""
-            direct = ""
-            if final_acc >= 85:
-                msg = "✓ Eccellente"
-                direct = None
-            elif final_acc >= 60:
-                if centering_score < 80:
-                    msg = "Centra meglio"
-                    direct = "Sposta la gamba"
-                elif sensors_score < 100:
-                    msg = "Sensori mancanti"
-                    direct = "Controlla elettrodi"
-                else:
-                    msg = "Allinea meglio"
-                    direct = "Piccoli movimenti"
+            # CALCOLO FINALE
+            if alignment_score >= 75:
+                final_acc = (alignment_score * 0.40) + (sensors_score * 0.60)
+                if sensors_score >= 99.0: final_acc = max(final_acc, 88.0)
             else:
-                msg = "Riposiziona"
-                direct = "Inquadra la gamba"
+                final_acc = alignment_score
+
+            final_acc = min(100.0, final_acc)
+
+            if final_acc >= 85:
+                msg, direct = "✓ Eccellente", None
+            elif alignment_score < 75:
+                msg, direct = "Riposiziona", "Inquadra la gamba"
+            elif sensors_score < 100:
+                msg, direct = "Sensori?", "Controlla elettrodi"
+            else:
+                msg, direct = "Stabile...", "Non muoverti"
 
             return {
                 'success': True, 'accuracy': round(final_acc, 1),
                 'message': msg, 'direction': direct,
                 'sensors_status': sensors_status,
-                'metrics': sim_res
+                'metrics': {'raw_ssim': round(raw_ssim, 1), 'boosted': round(alignment_score, 1)}
             }
         except Exception as e:
+            logger.error(f"Validation error: {e}")
             return {'success': False, 'error': str(e)}
 
-    def calculate_centering_score(self, off_x, off_y):
-        """ Restituisce 100 se offset è 0, scende a 0 se offset è grande """
-        # Offset è normalizzato (0-1). 0.1 di offset è già tanto.
-        dist = np.sqrt(off_x ** 2 + off_y ** 2)
-        # Tolleranza: fino a 0.05 (5%) è perfetto (100 punti)
-        # Da 0.05 a 0.30 scende linearmente a 0
-        if dist < 0.05: return 100.0
-        if dist > 0.30: return 0.0
-        return 100.0 - ((dist - 0.05) / 0.25 * 100.0)
+    def _check_sensor_presence_live(self, frame, x, y, r):
+        """ Wrapper per validazione live, usa area leggermente ridotta """
+        h, w = frame.shape[:2]
+        check_r = int(r * 0.8)  # Area più stretta per il live
+        x1, y1 = max(0, x - check_r), max(0, y - check_r)
+        x2, y2 = min(w, x + check_r), min(h, y + check_r)
+        roi = frame[y1:y2, x1:x2]
+        if roi.size == 0: return False
+
+        # Tolleranza più bassa per il LIVE (1.5%) vs Rilevamento iniziale (5%)
+        # Perché in live ci sono riflessi e movimento
+        return self._check_color_signature_percent(roi, threshold=0.015)
+
+    def _check_color_signature_percent(self, roi, threshold):
+        """ Logica core dei colori riutilizzabile """
+        try:
+            hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+            # Azzurro
+            lower_cyan = np.array([75, 20, 70])
+            upper_cyan = np.array([145, 255, 255])
+            mask_cyan = cv2.inRange(hsv, lower_cyan, upper_cyan)
+            # Grigio
+            lower_grey = np.array([0, 0, 50])
+            upper_grey = np.array([180, 60, 220])
+            mask_grey = cv2.inRange(hsv, lower_grey, upper_grey)
+            # Bianco
+            lower_white = np.array([0, 0, 150])
+            upper_white = np.array([180, 70, 255])
+            mask_white = cv2.inRange(hsv, lower_white, upper_white)
+
+            combined = cv2.bitwise_or(mask_cyan, mask_grey)
+            combined = cv2.bitwise_or(combined, mask_white)
+            ratio = cv2.countNonZero(combined) / (roi.shape[0] * roi.shape[1])
+            return ratio > threshold
+        except:
+            return False
 
     def calculate_image_similarity(self, reference: np.ndarray, current: np.ndarray) -> Dict:
         try:
             h, w = reference.shape[:2]
-            curr_res = cv2.resize(current, (w, h))
-
-            # Use simple grayscale conversion
-            ref_gray = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
-            curr_gray = cv2.cvtColor(curr_res, cv2.COLOR_BGR2GRAY)
-
-            # Standardize lighting
-            ref_gray = cv2.normalize(ref_gray, None, 0, 255, cv2.NORM_MINMAX)
-            curr_gray = cv2.normalize(curr_gray, None, 0, 255, cv2.NORM_MINMAX)
-
-            # Robust Template Match (Normed handles lighting differences best)
-            res = cv2.matchTemplate(curr_gray, ref_gray, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
-            # max_val is -1 to 1. Convert to 0-100.
-            # Usually good match is > 0.6
-            match_score = max(0, max_val * 100)
-
-            # Calculate Offset from center (0,0 because we resized 1:1)
-            offset_x = max_loc[0] / w
-            offset_y = max_loc[1] / h
-
-            return {
-                'combined_accuracy': match_score,  # Just raw matching score
-                'offset_x': offset_x, 'offset_y': offset_y,
-                'ssim': 0, 'template_match': match_score
-            }
+            curr_resized = cv2.resize(current, (w, h))
+            grayA = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
+            grayB = cv2.cvtColor(curr_resized, cv2.COLOR_BGR2GRAY)
+            score, _ = ssim(grayA, grayB, full=True, win_size=7, channel_axis=None)
+            raw_ssim = max(0, score * 100)
+            return {'raw_ssim': raw_ssim}
         except:
-            return {'combined_accuracy': 0, 'offset_x': 0, 'offset_y': 0}
-
-    def get_alignment_feedback(self, acc, ox, oy):
-        if acc >= 85: return {'message': '✓ OK', 'direction': None}
-        return {'message': 'Allinea', 'direction': 'Sposta'}
+            return {'raw_ssim': 0}
 
     def _decode_base64_image(self, b64):
+        if not b64: return None
         if ',' in b64: b64 = b64.split(',')[1]
         try:
             return cv2.imdecode(np.frombuffer(base64.b64decode(b64), np.uint8), cv2.IMREAD_COLOR)

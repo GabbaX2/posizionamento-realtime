@@ -1,9 +1,51 @@
 {% extends "base.html" %}
 
-{% block title %}Validazione Step-by-Step{% endblock %}
+{% block title %}Validazione Step-by-Step con Calibrazione{% endblock %}
 
 {% block content %}
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"
+            crossorigin="anonymous"></script>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 relative">
+
+        <div id="calibrationModal"
+             class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl">
+            <div class="bg-[#161831] border border-[#2e3054] p-6 rounded-2xl max-w-2xl w-full shadow-2xl relative flex flex-col items-center">
+                <div class="w-full flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-white flex items-center gap-2">
+                        <i class="bi bi-magic text-indigo-400"></i> Calibrazione Sfondo
+                    </h3>
+                    <span class="text-xs font-mono text-slate-500 bg-slate-900 px-2 py-1 rounded">MediaPipe ML Active</span>
+                </div>
+
+                <p class="text-slate-300 text-center mb-6">
+                    Posizionati in modo che la gamba sia chiaramente visibile.<br>
+                    Lo sfondo viene rimosso digitalmente per verificare la qualità della ripresa.
+                </p>
+
+                <div class="relative w-full aspect-video bg-grid-pattern rounded-xl overflow-hidden border-2 border-indigo-500/50 shadow-[0_0_30px_rgba(79,70,229,0.3)] mb-6">
+                    <canvas id="calibrationCanvas" class="w-full h-full object-contain"></canvas>
+
+                    <div class="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none">
+                        <div class="bg-black/70 backdrop-blur text-white px-4 py-1 rounded-full text-xs font-bold border border-white/10">
+                            <i class="bi bi-eye-fill mr-1"></i> Anteprima Maschera AI
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-4 w-full">
+                    <button id="cancelCalibrationBtn"
+                            class="flex-1 py-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition border border-transparent hover:border-slate-600">
+                        Annulla
+                    </button>
+                    <button id="confirmCalibrationBtn"
+                            class="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg font-bold shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="bi bi-check-circle-fill"></i> Conferma e Inizia
+                    </button>
+                </div>
+            </div>
+        </div>
         <div class="lg:col-span-8">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-2xl font-bold text-white tracking-tight">Validazione a Step</h2>
@@ -126,6 +168,7 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <script>
+        // --- VARIABILI GLOBALI ---
         let cleanReferenceImage = null;
         let validationOverlayImage = null;
         let stepsConfig = null;
@@ -138,10 +181,11 @@
         let currentStep = 1;
         let totalSteps = 1;
 
-        // NUOVE VARIABILI PER SMOOTHING
+        // Smoothing UI
         let targetAccuracy = 0;
         let displayedAccuracy = 0;
 
+        // Logica Step/Lock
         let lockTimer = 0;
         const LOCK_THRESHOLD = 85;
         const LOCK_DURATION = 1500;
@@ -152,10 +196,26 @@
         const ctx = canvas ? canvas.getContext('2d') : null;
         const CIRCUMFERENCE = 175;
 
+        // --- VARIABILI CALIBRAZIONE (MediaPipe) ---
+        let selfieSegmentation = null;
+        let isCalibrating = false;
+        let calibrationReqId = null;
+        const calibrationCanvas = document.getElementById('calibrationCanvas');
+        const calCtx = calibrationCanvas ? calibrationCanvas.getContext('2d') : null;
+
+
         document.addEventListener('DOMContentLoaded', () => {
             loadSession();
-            document.getElementById('startBtn').onclick = startValidation;
+
+            // MODIFICA: Il tasto Start ora lancia il processo di calibrazione
+            document.getElementById('startBtn').onclick = startCalibrationProcess;
+
             document.getElementById('stopBtn').onclick = stopValidation;
+
+            // Nuovi pulsanti Modale
+            document.getElementById('confirmCalibrationBtn').onclick = confirmCalibrationAndStart;
+            document.getElementById('cancelCalibrationBtn').onclick = closeCalibration;
+
             document.getElementById('opacitySlider').oninput = (e) => {
                 overlayOpacity = e.target.value / 100;
                 document.getElementById('opacityValue').innerText = e.target.value;
@@ -175,11 +235,101 @@
                 };
             }
 
-            // AVVIA ANIMAZIONE SMOOTHING
             requestAnimationFrame(animateValues);
         });
 
-        // --- GESTIONE UPLOAD ---
+        // ---------------------------------------------
+        // 1. LOGICA DI CALIBRAZIONE (MediaPipe)
+        // ---------------------------------------------
+
+        async function initMediaPipe() {
+            if (selfieSegmentation) return;
+
+            console.log("Inizializzazione MediaPipe...");
+            selfieSegmentation = new SelfieSegmentation({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+                }
+            });
+
+            selfieSegmentation.setOptions({
+                modelSelection: 1, // 1 = Landscape (Più lento ma più preciso), 0 = General
+                selfieMode: false,
+            });
+
+            selfieSegmentation.onResults(onCalibrationResults);
+        }
+
+        async function startCalibrationProcess() {
+            // Assicuriamoci che la camera sia attiva prima
+            if (!isCameraActive) {
+                await initCamera();
+            }
+
+            // Inizializza AI
+            await initMediaPipe();
+
+            // Mostra UI
+            document.getElementById('calibrationModal').classList.remove('hidden');
+            isCalibrating = true;
+
+            // Avvia loop di calibrazione
+            const processCalibrationFrame = async () => {
+                if (!isCalibrating) return;
+
+                if (video.readyState >= 2) { // 2 = HAVE_CURRENT_DATA
+                    await selfieSegmentation.send({image: video});
+                }
+                calibrationReqId = requestAnimationFrame(processCalibrationFrame);
+            };
+            processCalibrationFrame();
+        }
+
+        function onCalibrationResults(results) {
+            if (!isCalibrating || !calCtx) return;
+
+            // Imposta dimensioni
+            calibrationCanvas.width = results.image.width;
+            calibrationCanvas.height = results.image.height;
+
+            calCtx.save();
+            calCtx.clearRect(0, 0, calibrationCanvas.width, calibrationCanvas.height);
+
+            // 1. Disegna la maschera (sagoma bianca su nero)
+            calCtx.drawImage(results.segmentationMask, 0, 0, calibrationCanvas.width, calibrationCanvas.height);
+
+            // 2. 'source-in': mantiene i nuovi disegni (immagine webcam) SOLO dove c'è già qualcosa (la maschera bianca)
+            // Questo taglia via lo sfondo
+            calCtx.globalCompositeOperation = 'source-in';
+            calCtx.drawImage(results.image, 0, 0, calibrationCanvas.width, calibrationCanvas.height);
+
+            // 3. 'destination-over': disegna dietro a tutto ciò che esiste (lo sfondo nero)
+            calCtx.globalCompositeOperation = 'destination-over';
+            calCtx.fillStyle = '#000000'; // Colore sfondo oscurato
+            calCtx.fillRect(0, 0, calibrationCanvas.width, calibrationCanvas.height);
+
+            calCtx.restore();
+        }
+
+        function closeCalibration() {
+            isCalibrating = false;
+            if (calibrationReqId) cancelAnimationFrame(calibrationReqId);
+            document.getElementById('calibrationModal').classList.add('hidden');
+        }
+
+        function confirmCalibrationAndStart() {
+            // Utente soddisfatto della calibrazione/inquadratura
+            closeCalibration();
+
+            // Avvia la validazione vera
+            realStartValidation();
+        }
+
+
+        // ---------------------------------------------
+        // 2. GESTIONE UPLOAD E SESSIONE
+        // ---------------------------------------------
+
         async function handleFileUpload(file) {
             if (!file) return;
             const formData = new FormData();
@@ -195,25 +345,7 @@
                     localStorage.setItem('validationOverlayImage', `data:image/png;base64,${data.drawing_overlay_image}`);
                     localStorage.setItem('referenceMetadata', JSON.stringify(data));
 
-                    cleanReferenceImage = new Image();
-                    cleanReferenceImage.src = `data:image/png;base64,${data.reference_image}`;
-                    validationOverlayImage = new Image();
-                    validationOverlayImage.src = `data:image/png;base64,${data.drawing_overlay_image}`;
-
-                    stepsConfig = data.steps_config || {};
-                    const dictLen = Object.keys(stepsConfig).length;
-                    const listLen = data.sensors_data ? Math.ceil(data.sensors_data.length / 2) : 1;
-                    totalSteps = Math.max(dictLen, listLen, data.total_steps || 1);
-
-                    document.getElementById('totalStepsDisp').innerText = totalSteps;
-                    document.getElementById('sessionTotalSteps').innerText = totalSteps;
-                    document.getElementById('referencePreview').innerHTML = `<img src="${validationOverlayImage.src}" class="w-3/4 mx-auto rounded border border-slate-600">`;
-                    document.getElementById('startBtn').disabled = false;
-
-                    validationOverlayImage.onload = () => {
-                        initCamera();
-                        resizeCanvas();
-                    }
+                    loadSession(); // Ricarica variabili
                     alert(`Upload OK: ${data.message}`);
                 } else {
                     alert("Errore: " + data.error);
@@ -250,7 +382,8 @@
                 document.getElementById('referencePreview').innerHTML = `<img src="${ovlSrc}" class="w-3/4 mx-auto rounded border border-slate-600">`;
 
                 validationOverlayImage.onload = () => {
-                    initCamera();
+                    // Non avviamo la camera subito, aspettiamo il click o la calibrazione
+                    // ma ridimensioniamo per sicurezza
                     resizeCanvas();
                 };
                 document.getElementById('startBtn').disabled = false;
@@ -259,6 +392,7 @@
 
         async function initCamera() {
             if (isCameraActive || !window.sensorApp) return;
+            // Assumi che window.sensorApp esista dal file js/main.js incluso
             await window.sensorApp.initializeCameraWithAdaptiveResolution(null, validationOverlayImage);
             isCameraActive = true;
             document.getElementById('camStatus').innerText = "Camera OK";
@@ -266,30 +400,11 @@
             requestAnimationFrame(drawLoop);
         }
 
-        // --- ANIMAZIONE FLUIDA VALORI ---
-        function animateValues() {
-            if (Math.abs(targetAccuracy - displayedAccuracy) > 0.5) {
-                // Interpolazione: si avvicina al target del 10% ogni frame (effetto fluido)
-                displayedAccuracy += (targetAccuracy - displayedAccuracy) * 0.1;
-            } else {
-                displayedAccuracy = targetAccuracy;
-            }
+        // ---------------------------------------------
+        // 3. LOGICA VALIDAZIONE (CORE)
+        // ---------------------------------------------
 
-            // Aggiorna UI
-            const finalVal = Math.round(displayedAccuracy);
-            const accValEl = document.getElementById('accuracyValue');
-            if (accValEl) accValEl.innerText = finalVal + '%';
-
-            // Aggiorna anello progresso
-            const progress = Math.min(finalVal / 100, 1);
-            const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
-            const ring = document.getElementById('lockProgressRing');
-            if (ring) ring.style.strokeDashoffset = offset;
-
-            requestAnimationFrame(animateValues);
-        }
-
-        function startValidation() {
+        function realStartValidation() {
             if (!isCameraActive) return;
             isValidating = true;
             currentStep = 1;
@@ -300,6 +415,8 @@
             document.getElementById('skipGroupBtn').classList.remove('hidden');
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
+
+            // Loop per inviare frame al backend (ogni 500ms)
             validationIntervalId = setInterval(validateBackend, 500);
         }
 
@@ -322,6 +439,10 @@
             tempCanvas.width = video.videoWidth;
             tempCanvas.height = video.videoHeight;
             tempCanvas.getContext('2d').drawImage(video, 0, 0);
+
+            // Nota: Inviamo l'immagine normale. Se volessi inviare quella ritagliata,
+            // dovresti usare selfieSegmentation qui dentro, ma rallenterebbe molto.
+            // La calibrazione iniziale serve a garantire che l'immagine normale sia buona.
             const frame = tempCanvas.toDataURL('image/jpeg', 0.6);
             const meta = JSON.parse(localStorage.getItem('referenceMetadata'));
 
@@ -339,9 +460,7 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    // ASSEGNA AL TARGET PER ANIMAZIONE FLUIDA
-                    targetAccuracy = data.accuracy;
-
+                    targetAccuracy = data.accuracy; // Per animazione
                     document.getElementById('accuracyMessage').innerText = data.message;
                     document.getElementById('accuracyPanel').classList.remove('hidden');
 
@@ -349,17 +468,9 @@
                         data.sensors_status.forEach(s => sensorsRealtimeStatus[s.id] = s.present);
                     }
 
-                    // AVANZAMENTO STEP: Solo se blocchiamo il timer, ma l'utente ha chiesto manuale
-                    // Qui gestiamo solo il timer visivo (lock) se volessimo auto-next, ma per ora NO.
-                    // (Timer resettato sempre a 0 per modalità 100% manuale se richiesto,
-                    // oppure lasciato qui per l'effetto visivo di "completamento" senza cambio step)
+                    // Logica Timer Lock (per ora solo visiva se manuale)
                     if (displayedAccuracy >= LOCK_THRESHOLD) {
                         lockTimer += 500;
-                        if (lockTimer >= LOCK_DURATION) {
-                            // nextStep(); // DISABILITATO PER RICHIESTA CONTROLLO MANUALE
-                            // Se vuoi che avanzi da solo, togli il commento sopra.
-                            // Altrimenti resta fermo qui.
-                        }
                     } else {
                         lockTimer = 0;
                     }
@@ -381,19 +492,41 @@
             }
         }
 
+        // ---------------------------------------------
+        // 4. RENDERING GRAFICO (Overlay, UI)
+        // ---------------------------------------------
+
+        function animateValues() {
+            if (Math.abs(targetAccuracy - displayedAccuracy) > 0.5) {
+                displayedAccuracy += (targetAccuracy - displayedAccuracy) * 0.1;
+            } else {
+                displayedAccuracy = targetAccuracy;
+            }
+            const finalVal = Math.round(displayedAccuracy);
+            const accValEl = document.getElementById('accuracyValue');
+            if (accValEl) accValEl.innerText = finalVal + '%';
+
+            const progress = Math.min(finalVal / 100, 1);
+            const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
+            const ring = document.getElementById('lockProgressRing');
+            if (ring) ring.style.strokeDashoffset = offset;
+
+            requestAnimationFrame(animateValues);
+        }
+
         function drawLoop() {
             if (!isCameraActive) return;
             resizeCanvas();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Disegna Overlay di Riferimento (trasparente)
             ctx.globalAlpha = overlayOpacity;
             const dims = getDrawDimensions();
             if (validationOverlayImage) ctx.drawImage(validationOverlayImage, dims.x, dims.y, dims.w, dims.h);
 
+            // Disegna Indicatori Step/Sensori
             if (isValidating && stepsConfig) {
                 const scale = dims.w / validationOverlayImage.naturalWidth;
-
-                // LOGICA NEON VISIVA: Se la percentuale visualizzata è > 85%, TUTTO VERDE.
                 const isGlobalSuccess = displayedAccuracy >= 85;
 
                 Object.keys(stepsConfig).forEach(stepKey => {
@@ -406,9 +539,10 @@
                         const r = s.r * scale;
                         const isPresent = sensorsRealtimeStatus[s.id];
 
-                        ctx.lineWidth = 5; // Spessore aumentato per visibilità
+                        ctx.lineWidth = 5;
 
                         if (stepNum < currentStep) {
+                            // Step Passati
                             ctx.globalAlpha = 0.7;
                             ctx.strokeStyle = '#22c55e';
                             ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
@@ -420,34 +554,30 @@
                             ctx.font = 'bold 20px Arial';
                             ctx.fillText("✓", cx - 7, cy + 7);
                         } else if (stepNum === currentStep) {
+                            // Step Corrente
                             ctx.globalAlpha = 1.0;
-
-                            // VISUALIZZAZIONE: Verde se presente fisicamente O se successo globale
                             if (isPresent || isGlobalSuccess) {
-                                // STILE NEON VERDE ACCESO
-                                ctx.shadowBlur = 30; // Glow molto forte
-                                ctx.shadowColor = '#00FF00'; // Verde Neon puro
+                                // Successo (Verde Neon)
+                                ctx.shadowBlur = 30;
+                                ctx.shadowColor = '#00FF00';
                                 ctx.strokeStyle = '#00FF00';
-                                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Tint interno
-
+                                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
                                 ctx.beginPath();
                                 ctx.arc(cx, cy, r, 0, Math.PI * 2);
                                 ctx.fill();
                                 ctx.stroke();
-
                                 ctx.shadowBlur = 0;
                                 ctx.fillStyle = '#fff';
                                 ctx.font = 'bold 16px Arial';
                                 ctx.fillText(s.id, cx - 5, cy + 5);
                             } else {
-                                // STILE ROSSO
+                                // Mancante (Rosso Pulsante)
                                 const pulse = 1 + Math.sin(Date.now() / 150) * 0.15;
                                 ctx.strokeStyle = '#FF0000';
                                 ctx.shadowBlur = 25;
                                 ctx.shadowColor = '#FF0000';
-                                const r_pulse = r * pulse;
                                 ctx.beginPath();
-                                ctx.arc(cx, cy, r_pulse, 0, Math.PI * 2);
+                                ctx.arc(cx, cy, r * pulse, 0, Math.PI * 2);
                                 ctx.stroke();
                                 ctx.shadowBlur = 0;
                                 ctx.fillStyle = '#FF0000';
@@ -455,6 +585,7 @@
                                 ctx.fillText("MANCA", cx - 25, cy - r - 10);
                             }
                         } else {
+                            // Step Futuri
                             ctx.globalAlpha = 0.3;
                             ctx.strokeStyle = '#94a3b8';
                             ctx.beginPath();
@@ -475,6 +606,7 @@
         }
 
         function getDrawDimensions() {
+            if (!validationOverlayImage) return {x: 0, y: 0, w: 0, h: 0};
             const iw = validationOverlayImage.naturalWidth;
             const ih = validationOverlayImage.naturalHeight;
             const cw = canvas.width;
@@ -486,8 +618,10 @@
         }
 
         function resizeCanvas() {
-            canvas.width = video.clientWidth;
-            canvas.height = video.clientHeight;
+            if (video) {
+                canvas.width = video.clientWidth;
+                canvas.height = video.clientHeight;
+            }
         }
     </script>
 {% endblock %}

@@ -136,20 +136,12 @@ def api_remove_background():
         return jsonify({'success': False, 'error': f'Errore server: {str(e)}'}), 500
 
 
-# ============================================================================
-# NOTA: L'ENDPOINT /api/extract_drawing_overlay È STATO RIMOSSO
-#       PERCHÉ NON PIÙ NECESSARIO.
-# ============================================================================
-
-
 @app.route('/api/validate_frame', methods=['POST'])
 def api_validate_frame():
     """
     Endpoint per validare un frame dalla webcam
     """
     try:
-        # Nota: Non logghiamo più qui per evitare di intasare i log
-        # logger.info("[ROUTE] /api/validate_frame called")
         result = validation_service.validate_current_frame(request)
         return jsonify(result)
     except Exception as e:
