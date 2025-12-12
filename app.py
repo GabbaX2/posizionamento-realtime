@@ -42,6 +42,10 @@ def upload_page():
 def validation_page():
     return render_template('validation.html')
 
+@app.route('/login')
+def login():
+    return render_template('login.html')
+
 
 # ============================================================================
 # API ENDPOINTS
@@ -145,15 +149,6 @@ def api_validate_frame():
         }), 500
 
 
-# ============================================================================
-# ALTRI ENDPOINT (Status, Check Reference) - Invariati o Rimovibili
-# ============================================================================
-# Nota: get_validation_status non è più strettamente necessario col nuovo approccio stateless,
-# ma puoi tenerlo se il frontend lo chiama. Se lo tieni, devi implementare
-# get_validation_status dentro ValidationService o rimuovere la rotta.
-# Per ora rimuovo le rotte che dipendevano da logiche vecchie per evitare errori,
-# a meno che tu non ne abbia bisogno specifico nel JS.
-
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
@@ -180,4 +175,4 @@ if __name__ == '__main__':
     # Rimuoviamo cartelle vecchie non più usate dal nuovo approccio
 
     print("\n🚀 Avvio applicazione Flask...")
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(host='0.0.0.0', port=5000)

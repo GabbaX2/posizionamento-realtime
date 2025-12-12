@@ -129,7 +129,7 @@
     <script>
         // --- VARIABILI GLOBALI ---
         let cleanReferenceImage = null;
-        let validationOverlayImage = null; // Maschera bordi (Bianco su Nero)
+        let validationOverlayImage = null;
         let stepsConfig = null;
         let overlayOpacity = 0.5;
 
@@ -140,7 +140,6 @@
         let currentStep = 1;
         let totalSteps = 1;
 
-        // Variabili Smoothing UI
         let targetAccuracy = 0;
         let displayedAccuracy = 0;
         let sensorsRealtimeStatus = {};
@@ -148,41 +147,25 @@
         const video = document.getElementById('videoElement');
         const canvas = document.getElementById('overlayCanvas');
         const ctx = canvas ? canvas.getContext('2d') : null;
-        const CIRCUMFERENCE = 175; // Per l'animazione SVG
+        const CIRCUMFERENCE = 175;
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSession();
 
-            // Setup Bottoni
             document.getElementById('startBtn').onclick = startValidation;
             document.getElementById('stopBtn').onclick = stopValidation;
 
-            // Slider Opacità
             document.getElementById('opacitySlider').oninput = (e) => {
                 overlayOpacity = e.target.value / 100;
                 document.getElementById('opacityValue').innerText = e.target.value;
             };
 
-            // Bottone Salta Step
             const skipBtn = document.getElementById('skipGroupBtn');
             if (skipBtn) skipBtn.onclick = () => nextStep();
 
-            // Link Upload (se presente)
-            const uploadLink = document.querySelector('a[href="/upload"]');
-            if (uploadLink) {
-                uploadLink.onclick = (e) => {
-                    e.preventDefault();
-                    window.location.href = '/upload';
-                };
-            }
-
-            // Avvio Loop Animazione UI
+            // Loop animazione UI
             requestAnimationFrame(animateValues);
         });
-
-        // ---------------------------------------------
-        // 1. CARICAMENTO SESSIONE & CAMERA
-        // ---------------------------------------------
 
         function loadSession() {
             const refSrc = localStorage.getItem('cleanReferenceImage');
@@ -210,13 +193,11 @@
                 document.getElementById('totalStepsDisp').innerText = totalSteps;
                 document.getElementById('sessionTotalSteps').innerText = totalSteps;
 
-                // Anteprima piccola del riferimento
                 document.getElementById('referencePreview').innerHTML = `
-                    <div class="bg-black p-2 rounded border border-slate-700">
-                        <img src="${ovlSrc}" class="w-full h-auto opacity-80" alt="Riferimento">
-                    </div>`;
+                <div class="bg-black p-2 rounded border border-slate-700">
+                    <img src="${ovlSrc}" class="w-full h-auto opacity-80" alt="Riferimento">
+                </div>`;
 
-                // Quando l'immagine di overlay è pronta, avviamo la camera
                 validationOverlayImage.onload = () => {
                     initCamera();
                 };
@@ -226,20 +207,12 @@
 
         async function initCamera() {
             if (isCameraActive || !window.sensorApp) return;
-            // Usa il metodo esistente in main.js
             await window.sensorApp.initializeCameraWithAdaptiveResolution(null, validationOverlayImage);
             isCameraActive = true;
-
             document.getElementById('camStatus').innerText = "Camera OK";
             document.getElementById('camStatus').className = "px-3 py-1 rounded-full text-xs font-semibold bg-green-900 text-green-200 border border-green-700";
-
-            // Avvia il loop di disegno sul canvas
             requestAnimationFrame(drawLoop);
         }
-
-        // ---------------------------------------------
-        // 2. LOGICA VALIDAZIONE
-        // ---------------------------------------------
 
         function startValidation() {
             if (!isCameraActive) return;
@@ -247,28 +220,21 @@
             currentStep = 1;
             updateUI();
 
-            // Aggiorna UI Bottoni
             document.getElementById('stepStatus').classList.remove('hidden');
             document.getElementById('skipGroupBtn').classList.remove('hidden');
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
 
-            // Avvia il polling al backend
             validationIntervalId = setInterval(validateBackend, 500);
         }
 
         function stopValidation() {
             isValidating = false;
             clearInterval(validationIntervalId);
-
-            // Nascondi pannelli attivi
             document.getElementById('accuracyPanel').classList.add('hidden');
             document.getElementById('stepStatus').classList.add('hidden');
             document.getElementById('skipGroupBtn').classList.add('hidden');
-
-            // Mostra overlay finale
             document.getElementById('finalSuccessOverlay').classList.remove('hidden');
-
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         }
@@ -276,38 +242,46 @@
         async function validateBackend() {
             if (!isValidating) return;
 
-            // Cattura frame corrente dal video
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = video.videoWidth;
             tempCanvas.height = video.videoHeight;
             tempCanvas.getContext('2d').drawImage(video, 0, 0);
-
-            // Frame JPEG leggero
             const frame = tempCanvas.toDataURL('image/jpeg', 0.6);
-            const meta = JSON.parse(localStorage.getItem('referenceMetadata'));
+
+            const metaString = localStorage.getItem('referenceMetadata');
+            if (!metaString) return;
+            const meta = JSON.parse(metaString);
 
             try {
                 const res = await fetch('/api/validate_frame', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        session_id: meta ? meta.session_id : 'default',
+                        session_id: meta.session_id || 'default',
                         current_frame: frame,
                         current_step: currentStep
                     })
                 });
                 const data = await res.json();
 
+                // --- DEBUG LOG ---
+                console.log("Validate Resp:", data);
+
                 if (data.success) {
-                    targetAccuracy = data.accuracy; // Per animazione fluida
+                    targetAccuracy = data.accuracy;
 
                     document.getElementById('accuracyMessage').innerText = data.message;
                     document.getElementById('groupActionText').innerText = data.direction || "Allineamento";
                     document.getElementById('accuracyPanel').classList.remove('hidden');
 
-                    // Aggiorna stato sensori
                     if (data.sensors_status) {
                         data.sensors_status.forEach(s => sensorsRealtimeStatus[s.id] = s.present);
+                    }
+                } else {
+                    console.warn("Backend Error:", data.error);
+                    if (data.error === 'Session Expired') {
+                        alert("Sessione scaduta. Ricarica la pagina.");
+                        stopValidation();
                     }
                 }
             } catch (e) {
@@ -317,33 +291,20 @@
 
         function nextStep() {
             currentStep++;
-            if (currentStep > totalSteps) {
-                stopValidation();
-            } else {
-                updateUI();
-            }
+            if (currentStep > totalSteps) stopValidation();
+            else updateUI();
         }
 
-        // ---------------------------------------------
-        // 3. RENDERING & ANIMAZIONI
-        // ---------------------------------------------
-
         function animateValues() {
-            // Interpolazione lineare per il valore percentuale (effetto fluido)
             if (Math.abs(targetAccuracy - displayedAccuracy) > 0.5) {
                 displayedAccuracy += (targetAccuracy - displayedAccuracy) * 0.1;
             } else {
                 displayedAccuracy = targetAccuracy;
             }
-
-            // Aggiorna testo
             document.getElementById('accuracyValue').innerText = Math.round(displayedAccuracy) + '%';
-
-            // Aggiorna anello progresso
             const progress = Math.min(Math.round(displayedAccuracy) / 100, 1);
             const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
             document.getElementById('lockProgressRing').style.strokeDashoffset = offset;
-
             requestAnimationFrame(animateValues);
         }
 
@@ -352,19 +313,14 @@
             resizeCanvas();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Disegna Overlay Guida (Fondamentale per allineamento manuale)
+            // 1. Disegna Riferimento (Disegno Arancione)
             ctx.globalAlpha = overlayOpacity;
             const dims = getDrawDimensions(canvas.width, canvas.height, validationOverlayImage);
+            if (validationOverlayImage) ctx.drawImage(validationOverlayImage, dims.x, dims.y, dims.w, dims.h);
 
-            // Disegniamo il riferimento (linee bianche)
-            if (validationOverlayImage) {
-                ctx.drawImage(validationOverlayImage, dims.x, dims.y, dims.w, dims.h);
-            }
-
-            // 2. Disegna Indicatori Step (Sensori)
+            // 2. Disegna Indicatori Step
             if (isValidating && stepsConfig) {
                 const scale = dims.w / validationOverlayImage.naturalWidth;
-
                 Object.keys(stepsConfig).forEach(stepKey => {
                     const stepNum = parseInt(stepKey);
                     const sensors = stepsConfig[stepKey];
@@ -376,19 +332,15 @@
                         const isPresent = sensorsRealtimeStatus[s.id];
 
                         ctx.lineWidth = 3;
-
                         if (stepNum < currentStep) {
-                            // Step Passati (Verde scuro/trasparente)
                             ctx.globalAlpha = 0.5;
                             ctx.strokeStyle = '#22c55e';
                             ctx.beginPath();
                             ctx.arc(cx, cy, r, 0, Math.PI * 2);
                             ctx.stroke();
                         } else if (stepNum === currentStep) {
-                            // Step Corrente
                             ctx.globalAlpha = 1.0;
                             if (isPresent) {
-                                // Trovato (Verde Neon)
                                 ctx.strokeStyle = '#00FF00';
                                 ctx.shadowBlur = 15;
                                 ctx.shadowColor = '#00FF00';
@@ -397,14 +349,7 @@
                                 ctx.stroke();
                                 ctx.shadowBlur = 0;
                             } else {
-                                // In attesa / Non trovato (Giallo/Grigio)
-                                if (displayedAccuracy < 50) {
-                                    // Se non allineato, grigio
-                                    ctx.strokeStyle = '#94a3b8';
-                                } else {
-                                    // Se allineato ma manca sensore, giallo pulsante
-                                    ctx.strokeStyle = '#FACC15';
-                                }
+                                ctx.strokeStyle = (displayedAccuracy < 50) ? '#94a3b8' : '#FACC15';
                                 ctx.beginPath();
                                 ctx.arc(cx, cy, r, 0, Math.PI * 2);
                                 ctx.stroke();
@@ -416,7 +361,6 @@
             requestAnimationFrame(drawLoop);
         }
 
-        // Helper per centrare l'immagine nel canvas mantenendo aspect ratio
         function getDrawDimensions(cw, ch, img) {
             if (!img) return {x: 0, y: 0, w: 0, h: 0};
             const iw = img.naturalWidth;

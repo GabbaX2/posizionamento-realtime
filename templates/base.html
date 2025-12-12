@@ -47,83 +47,139 @@
             font-family: 'Inter', sans-serif;
         }
 
-        /* --- COMPATIBILITY LAYER (CRITICO PER IL TUO JS) ---
-           Queste regole permettono al tuo JS originale (che usa classi Bootstrap)
-           di funzionare all'interno del layout Tailwind.
-        */
-        .d-none { display: none !important; }
-        .d-block { display: block !important; }
-        .d-flex { display: flex !important; }
+        /* --- COMPATIBILITY LAYER --- */
+        .d-none {
+            display: none !important;
+        }
+
+        .d-block {
+            display: block !important;
+        }
+
+        .d-flex {
+            display: flex !important;
+        }
 
         /* Adattamento Modals Bootstrap al tema scuro */
-        .modal-content { background-color: #161831 !important; border: 1px solid #2e3054 !important; color: white !important; }
-        .modal-header { border-bottom: 1px solid #2e3054 !important; }
-        .modal-footer { border-top: 1px solid #2e3054 !important; }
-        .btn-close { filter: invert(1) grayscale(100%) brightness(200%); } /* Icona X bianca */
+        .modal-content {
+            background-color: #161831 !important;
+            border: 1px solid #2e3054 !important;
+            color: white !important;
+        }
+
+        .modal-header {
+            border-bottom: 1px solid #2e3054 !important;
+        }
+
+        .modal-footer {
+            border-top: 1px solid #2e3054 !important;
+        }
+
+        .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
 
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0f1021; }
-        ::-webkit-scrollbar-thumb { background: #2e3054; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4f46e5; }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f1021;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2e3054;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4f46e5;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
 
-    <nav class="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0f1021]/80 backdrop-blur-md">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex h-16 items-center justify-between">
-                <div class="flex-shrink-0">
-                    <a href="{{ url_for('index') }}" class="flex items-center gap-2 group decoration-0">
-                        <span class="text-2xl font-bold text-white tracking-tight">Kin<span class="text-indigo-500">.ai</span></span>
+<nav class="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0f1021]/80 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex h-16 items-center justify-between">
+
+            <div class="flex-shrink-0">
+                <a href="{{ url_for('index') }}" class="flex items-center gap-2 group decoration-0">
+                    <span class="text-2xl font-bold text-white tracking-tight">Kin<span
+                            class="text-indigo-500">.ai</span></span>
+                </a>
+            </div>
+
+            <div class="hidden md:block">
+                <div class="ml-10 flex items-center space-x-4">
+                    <a href="{{ url_for('index') }}"
+                       class="text-gray-300 hover:text-white hover:bg-white/5 px-3 py-2 rounded-md text-sm font-medium transition-all no-underline">
+                        Home
+                    </a>
+                    <a href="{{ url_for('upload_page') }}"
+                       class="text-gray-300 hover:text-white hover:bg-white/5 px-3 py-2 rounded-md text-sm font-medium transition-all no-underline">
+                        Carica Riferimento
+                    </a>
+
+                    <div class="h-6 w-px bg-white/10 mx-2"></div>
+
+                    <a href="{{ url_for('validation_page') }}"
+                       class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-all shadow-lg shadow-indigo-500/30 no-underline">
+                        Validazione Live
+                    </a>
+
+                    <a href="{{ url_for('login') }}"
+                       class="flex items-center gap-2 text-white bg-white/5 hover:bg-white/20 border border-white/10 px-4 py-2 rounded-full text-sm font-medium transition-all no-underline">
+                        <i class="bi bi-box-arrow-in-right"></i>
+                        Login
                     </a>
                 </div>
+            </div>
 
-                <div class="hidden md:block">
-                    <div class="ml-10 flex items-baseline space-x-4">
-                        <a href="{{ url_for('index') }}" class="text-gray-300 hover:text-white hover:bg-white/5 px-3 py-2 rounded-md text-sm font-medium transition-all no-underline">
-                            Home
-                        </a>
-                        <a href="{{ url_for('upload_page') }}" class="text-gray-300 hover:text-white hover:bg-white/5 px-3 py-2 rounded-md text-sm font-medium transition-all no-underline">
-                            Carica Riferimento
-                        </a>
-                        <a href="{{ url_for('validation_page') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-all shadow-lg shadow-indigo-500/30 no-underline">
-                            Validazione Live
-                        </a>
-                    </div>
-                </div>
-
-                <div class="-mr-2 flex md:hidden">
-                    <button type="button" class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-700 hover:text-white focus:outline-none" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
-                        <i class="bi bi-list text-2xl"></i>
-                    </button>
-                </div>
+            <div class="-mr-2 flex md:hidden">
+                <button type="button"
+                        class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-700 hover:text-white focus:outline-none"
+                        onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+                    <i class="bi bi-list text-2xl"></i>
+                </button>
             </div>
         </div>
+    </div>
 
-        <div class="hidden md:hidden bg-[#161831] border-b border-white/10" id="mobile-menu">
-            <div class="space-y-1 px-2 pb-3 pt-2 sm:px-3">
-                <a href="{{ url_for('index') }}" class="text-gray-300 block rounded-md px-3 py-2 text-base font-medium">Home</a>
-                <a href="{{ url_for('upload_page') }}" class="text-gray-300 block rounded-md px-3 py-2 text-base font-medium">Carica</a>
-                <a href="{{ url_for('validation_page') }}" class="bg-indigo-600 text-white block rounded-md px-3 py-2 text-base font-medium">Validazione</a>
-            </div>
+    <div class="hidden md:hidden bg-[#161831] border-b border-white/10" id="mobile-menu">
+        <div class="space-y-1 px-2 pb-3 pt-2 sm:px-3">
+            <a href="{{ url_for('index') }}"
+               class="text-gray-300 block rounded-md px-3 py-2 text-base font-medium no-underline">Home</a>
+            <a href="{{ url_for('upload_page') }}"
+               class="text-gray-300 block rounded-md px-3 py-2 text-base font-medium no-underline">Carica</a>
+            <a href="{{ url_for('validation_page') }}"
+               class="bg-indigo-600 text-white block rounded-md px-3 py-2 text-base font-medium no-underline">Validazione</a>
+
+            <hr class="border-white/10 my-2">
+
+            <a href="{{ url_for('login') }}"
+               class="text-gray-300 block rounded-md px-3 py-2 text-base font-medium hover:bg-white/5 no-underline flex items-center gap-2">
+                <i class="bi bi-box-arrow-in-right"></i> Login
+            </a>
         </div>
-    </nav>
+    </div>
+</nav>
 
-    <main class="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {% block content %}{% endblock %}
-    </main>
+<main class="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {% block content %}{% endblock %}
+</main>
 
-    <footer class="border-t border-white/10 bg-[#0f1021] py-8 mt-auto">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            <p class="text-slate-500 text-sm">
-                &copy; 2025 Kin.ai Sensor Validator.
-            </p>
-        </div>
-    </footer>
+<footer class="border-t border-white/10 bg-[#0f1021] py-8 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 text-center">
+        <p class="text-slate-500 text-sm">
+            &copy; 2025 Kin.ai Sensor Validator.
+        </p>
+    </div>
+</footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
-    {% block scripts %}{% endblock %}
+{% block scripts %}{% endblock %}
 </body>
 </html>

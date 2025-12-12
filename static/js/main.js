@@ -23,6 +23,15 @@ class SensorValidationApp {
         this.statusElement = document.getElementById('statusMessage');
         this.referencePreview = document.getElementById('referencePreview');
 
+        // --- CONFIGURAZIONE MOBILE ---
+        if (this.videoElement) {
+            // 'playsinline' obbligatorio per iOS per non andare in fullscreen
+            this.videoElement.setAttribute('playsinline', '');
+            this.videoElement.setAttribute('webkit-playsinline', '');
+            // 'muted' spesso necessario per autoplay su mobile
+            this.videoElement.muted = true;
+        }
+
         this.verifyDOMElements();
     }
 
@@ -38,64 +47,30 @@ class SensorValidationApp {
         for (const [name, element] of Object.entries(requiredElements)) {
             if (!element) {
                 console.warn(`Elemento DOM non trovato: ${name}`);
-            } else {
-                // Rimosso log per pulizia console
-                // console.log(`✓ Elemento trovato: ${name}`);
             }
         }
     }
 
     setupEventListeners() {
-        // Event listeners vengono gestiti direttamente nella pagina HTML
-        // per evitare conflitti con il sistema di overlay
+        // Event listeners gestiti nell'HTML
     }
 
     async checkReferenceStatus() {
         try {
-            console.log('Checking reference status...');
-
-            // --- MODIFICA CORRETTIVA ---
-            // Le chiavi corrette che validation.html si aspetta sono:
-            // 'validationOverlayImage' (per il canvas)
-            // 'cleanReferenceImage' (per il backend)
-            // 'referenceMetadata'
             const localOverlay = localStorage.getItem('validationOverlayImage');
             const localMetadata = localStorage.getItem('referenceMetadata');
 
-            // C'è un'incoerenza. Inizializziamo this.referenceLoaded
-            // qui, ma validation.html ha la sua logica per
-            // caricare i dati. Ci affidiamo alla logica di validation.html
-            // e qui facciamo solo un controllo superficiale.
-
             if (localOverlay && localMetadata) {
-                console.log('✅ Riferimento (overlay/metadata) trovato nel localStorage');
+                console.log('✅ Riferimento trovato nel localStorage');
                 this.referenceLoaded = true;
-
-                // NOTA: 'validation.html' ha la sua logica 'loadReferenceFromStorage'
-                // che è più completa e gestisce l'UI.
-                // Questa funzione in main.js è quasi ridondante
-                // se non per il this.referenceLoaded.
-                // Evitiamo di duplicare la logica di 'displayReferencePreview'
-                // che è già gestita meglio in validation.html
-
             } else {
-                console.log('❌ Nessun riferimento trovato nel localStorage (overlay o metadata mancanti)');
+                console.log('❌ Nessun riferimento trovato');
                 this.referenceLoaded = false;
             }
-
         } catch (error) {
-            console.warn('Errore nel verificare lo stato del riferimento:', error);
+            console.warn('Errore check riferimento:', error);
             this.referenceLoaded = false;
-            return false;
         }
-    }
-
-    showReferenceRequiredMessage() {
-        // Questa funzione è gestita da validation.html
-    }
-
-    displayReferencePreview(imageData, metadata) {
-        // Questa funzione è gestita da validation.html
     }
 
     generateSessionId() {
@@ -104,44 +79,34 @@ class SensorValidationApp {
 
         if (urlSessionId) {
             this.sessionId = urlSessionId;
-            console.log('Session ID dall\'URL:', this.sessionId);
         } else {
             const storedSessionId = localStorage.getItem('sensor_validation_session');
             if (storedSessionId) {
                 this.sessionId = storedSessionId;
-                console.log('Session ID dal localStorage:', this.sessionId);
             } else {
                 this.sessionId = 'session_' + Math.random().toString(36).substring(2, 9);
                 localStorage.setItem('sensor_validation_session', this.sessionId);
-                console.log('Nuovo Session ID generato:', this.sessionId);
             }
         }
     }
 
-    /**
-     * Calcola la risoluzione ottimale basata sul container e sull'immagine di riferimento
-     */
     calculateOptimalResolution(containerWidth, containerHeight, referenceAspect = null) {
-        // Se abbiamo un aspect ratio di riferimento, usalo
         const targetAspect = referenceAspect || (containerWidth / containerHeight);
 
-        // Risoluzione massima supportata dalla maggior parte delle webcam
         const MAX_WIDTH = 1920;
         const MAX_HEIGHT = 1080;
 
         let width, height;
 
-        if (targetAspect > 1) {
-            // Landscape
+        if (targetAspect > 1) { // Landscape
             width = Math.min(containerWidth * window.devicePixelRatio, MAX_WIDTH);
             height = Math.round(width / targetAspect);
-        } else {
-            // Portrait
+        } else { // Portrait
             height = Math.min(containerHeight * window.devicePixelRatio, MAX_HEIGHT);
             width = Math.round(height * targetAspect);
         }
 
-        // Assicura che le dimensioni siano pari (requisito di molti codec)
+        // Dimensioni pari
         width = Math.floor(width / 2) * 2;
         height = Math.floor(height / 2) * 2;
 
@@ -149,188 +114,132 @@ class SensorValidationApp {
     }
 
     /**
-     * Inizializza l'accesso alla camera con risoluzione adattiva
-     * @returns {Promise<boolean>}
+     * Inizializza camera con PRIORITÀ FOTOCAMERA POSTERIORE
      */
     async initializeCameraWithAdaptiveResolution(preferredDeviceId = null, referenceImage = null) {
-        console.log('Inizializzazione camera con risoluzione adattiva...');
+        console.log('Inizializzazione camera...');
+
+        // 1. Check Sicurezza (HTTPS)
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (!window.isSecureContext && !isLocalhost) {
+            const msg = 'ERRORE SICUREZZA: La camera richiede HTTPS. Usa "flask run --cert=adhoc" o ngrok.';
+            console.error(msg);
+            this.showStatus('Errore: Serve HTTPS', 'error');
+            alert(msg);
+            return false;
+        }
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            this.showStatus('API camera non supportata dal browser', 'error');
+            this.showStatus('API camera non supportata', 'error');
             return false;
         }
 
-        // Ottieni dimensioni del container
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
         const videoContainer = document.querySelector('.video-container');
-        if (!videoContainer) {
-            console.error('Container video non trovato');
-            return false;
-        }
+        let containerWidth = videoContainer ? videoContainer.clientWidth : window.innerWidth;
+        let containerHeight = videoContainer ? videoContainer.clientHeight : window.innerHeight;
 
-        const containerWidth = videoContainer.clientWidth;
-        const containerHeight = videoContainer.clientHeight;
-
-        // Calcola aspect ratio di riferimento se disponibile
         let referenceAspect = null;
         if (referenceImage && referenceImage.naturalWidth && referenceImage.naturalHeight) {
             referenceAspect = referenceImage.naturalWidth / referenceImage.naturalHeight;
-            console.log(`Using reference aspect ratio: ${referenceAspect}`);
-        } else {
-            console.log('No reference image for aspect ratio, using container.');
         }
 
+        const optimalRes = this.calculateOptimalResolution(containerWidth, containerHeight, referenceAspect);
 
-        // Calcola risoluzione ottimale
-        const optimalRes = this.calculateOptimalResolution(
-            containerWidth,
-            containerHeight,
-            referenceAspect
-        );
-
-        console.log(`Risoluzione target: ${optimalRes.width}x${optimalRes.height}`);
-
-        // Detect Safari
-        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-        // Costruisci lista di constraint da provare
+        // LISTA TENTATIVI (Priorità alla Posteriore)
         const tryConstraintsList = [];
 
-        // 1. Constraint con risoluzione specifica e deviceId (se fornito)
+        // Tentativo 1: Device ID specifico (se selezionato manualmente)
         if (preferredDeviceId) {
             tryConstraintsList.push({
                 video: {
                     deviceId: {exact: preferredDeviceId},
                     width: {ideal: optimalRes.width},
-                    height: {ideal: optimalRes.height},
-                    aspectRatio: {ideal: referenceAspect || (optimalRes.width / optimalRes.height)}
+                    height: {ideal: optimalRes.height}
                 }
             });
         }
 
-        // 2. Constraint con risoluzione specifica (senza deviceId)
-        if (!isSafari) {
+        // Tentativo 2: Alta risoluzione + Preferenza Posteriore
+        if (!isMobile) {
             tryConstraintsList.push({
                 video: {
                     width: {ideal: optimalRes.width},
                     height: {ideal: optimalRes.height},
-                    aspectRatio: {ideal: referenceAspect || (optimalRes.width / optimalRes.height)},
-                    facingMode: 'user'
-                }
-            });
-
-            // 3. Constraint con risoluzione min/max
-            tryConstraintsList.push({
-                video: {
-                    width: {min: 640, ideal: optimalRes.width, max: 1920},
-                    height: {min: 480, ideal: optimalRes.height, max: 1080},
-                    facingMode: 'user'
+                    // { ideal: 'environment' } prova la posteriore, ma se sei su PC usa la webcam normale
+                    facingMode: {ideal: 'environment'}
                 }
             });
         }
 
-        // 4. Fallback base per Safari
+        // Tentativo 3: Mobile Friendly + OBBLIGO POSTERIORE
+        tryConstraintsList.push({
+            video: {
+                // MODIFICA CRUCIALE: 'environment' forza la camera posteriore
+                facingMode: 'environment',
+                width: {ideal: isMobile ? 1280 : optimalRes.width},
+                height: {ideal: isMobile ? 720 : optimalRes.height}
+            }
+        });
+
+        // Tentativo 4: Fallback generico (se la posteriore fallisce, prende qualsiasi cosa)
         tryConstraintsList.push({video: true});
 
-        // Enumera dispositivi disponibili
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const cameras = devices.filter(d => d.kind === 'videoinput');
-
-            if (cameras.length > 1 && !preferredDeviceId) {
-                console.log(`${cameras.length} camere trovate`);
-                // Prova con la prima camera disponibile
-                tryConstraintsList.unshift({
-                    video: {
-                        deviceId: {exact: cameras[0].deviceId},
-                        width: {ideal: optimalRes.width},
-                        height: {ideal: optimalRes.height}
-                    }
-                });
-            }
-        } catch (e) {
-            console.warn('Impossibile enumerare dispositivi:', e);
-        }
-
-        // Prova i constraint in sequenza
+        // Loop esecuzione tentativi
         for (const constraints of tryConstraintsList) {
             try {
-                console.log('Tentativo con constraint:', constraints);
+                console.log('Provo constraint:', JSON.stringify(constraints));
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-                // Ferma stream precedente se esiste
-                if (this.stream) {
-                    this.stream.getTracks().forEach(t => t.stop());
-                }
+                if (this.stream) this.stream.getTracks().forEach(t => t.stop());
 
-                // Ottieni le impostazioni effettive dello stream
-                const videoTrack = stream.getVideoTracks()[0];
-                const settings = videoTrack.getSettings();
-                console.log('Risoluzione ottenuta:', settings.width, 'x', settings.height);
-
-                // Attacca lo stream al video element
-                if (!this.videoElement) {
-                    console.error('Elemento video non trovato');
-                    stream.getTracks().forEach(t => t.stop());
-                    return false;
-                }
+                if (!this.videoElement) throw new Error('Video element missing');
 
                 this.videoElement.srcObject = stream;
                 this.stream = stream;
 
-                // Aspetta il caricamento dei metadata
-                await new Promise((resolve) => {
-                    const onLoaded = () => {
-                        this.videoElement.removeEventListener('loadedmetadata', onLoaded);
-                        resolve();
-                    };
-                    this.videoElement.addEventListener('loadedmetadata', onLoaded);
-                    setTimeout(resolve, 2500); // Timeout di sicurezza
-                });
+                // Promise play() esplicita
+                try {
+                    await this.videoElement.play();
+                } catch (playError) {
+                    console.warn("Autoplay bloccato, riprovo:", playError);
+                }
 
-                console.log('✅ Camera inizializzata con risoluzione adattiva');
+                if (this.videoElement.readyState < 1) {
+                    await new Promise(r => this.videoElement.onloadedmetadata = r);
+                }
 
-                // Aggiorna badge
+                const videoTrack = stream.getVideoTracks()[0];
+                const settings = videoTrack.getSettings();
+                console.log(`✅ Camera attiva: ${settings.width}x${settings.height}`);
+
                 const camStatus = document.getElementById('camStatus');
                 if (camStatus) {
                     camStatus.textContent = `Attiva (${settings.width}x${settings.height})`;
                     camStatus.className = 'badge bg-success';
                 }
 
-                this.showStatus('Camera pronta per la validazione', 'success');
+                this.showStatus('Camera pronta', 'success');
                 return true;
 
             } catch (err) {
-                console.warn('Tentativo fallito:', err.name, err.message);
-
+                console.warn('Tentativo fallito:', err.name);
                 if (err.name === 'NotAllowedError') {
                     this.showStatus('Permesso camera negato', 'error');
                     return false;
                 }
-                // Continua con il prossimo constraint
             }
         }
 
-        this.showStatus('Impossibile inizializzare la fotocamera', 'error');
+        this.showStatus('Impossibile avviare la fotocamera', 'error');
         return false;
     }
 
-    /**
-     * Aggiorna la risoluzione della camera quando il container cambia dimensione
-     */
     async updateCameraResolution(referenceImage = null) {
-        if (!this.stream) {
-            console.log('Nessuno stream attivo da aggiornare');
-            return false;
-        }
-
-        console.log('Aggiornamento risoluzione camera...');
-
-        // Ottieni il deviceId corrente
+        if (!this.stream) return false;
         const videoTrack = this.stream.getVideoTracks()[0];
-        const currentSettings = videoTrack.getSettings();
-        const deviceId = currentSettings.deviceId;
-
-        // Re-inizializza con la nuova risoluzione
+        const deviceId = videoTrack.getSettings().deviceId;
         return await this.initializeCameraWithAdaptiveResolution(deviceId, referenceImage);
     }
 
@@ -345,7 +254,6 @@ class SensorValidationApp {
             this.statusElement.textContent = message;
             this.statusElement.className = `ms-3 text-${type}`;
         }
-        console.log(`Status [${type}]: ${message}`);
     }
 
     destroy() {
@@ -356,61 +264,36 @@ class SensorValidationApp {
     }
 }
 
-// --- MODIFICA 2: Inizializzazione globale ---
-// Rimosso il wrapper 'DOMContentLoaded' per eseguire questo
-// script immediatamente non appena viene caricato.
+// --- INITIALIZATION ---
 try {
-    console.log('🚀 Inizializzazione SensorValidationApp (immediata)...');
+    console.log('🚀 Init SensorValidationApp...');
     const app = new SensorValidationApp();
     window.sensorApp = app;
 
-    // Inizializzazione camera automatica dopo un breve delay
     setTimeout(() => {
-        console.log('Tentativo di inizializzazione camera...');
-
-        // --- MODIFICA 2b: Correggiamo la chiave del localStorage ---
-        // 'validation.html' salva l'overlay (per l'aspect ratio)
-        // con la chiave 'validationOverlayImage'.
         const storedReference = localStorage.getItem('validationOverlayImage');
         let referenceImage = null;
 
         if (storedReference) {
             referenceImage = new Image();
             referenceImage.src = storedReference;
-            console.log('Trovata immagine "validationOverlayImage" per calcolo aspect ratio');
-        } else {
-            console.warn('Nessuna immagine "validationOverlayImage" trovata, uso aspect ratio di default');
         }
 
-        // Aspetta che l'immagine (se trovata) sia caricata per leggerne le dimensioni
         const initializeCam = (img) => {
             app.initializeCameraWithAdaptiveResolution(null, img).then(success => {
-                if (success) {
-                    console.log('✅ Camera initialized successfully');
-                } else {
-                    console.error('❌ Failed to initialize camera');
-                    app.showStatus('Errore camera - verifica i permessi e ricarica la pagina', 'error');
-                }
-            }).catch(error => {
-                console.error('❌ Camera initialization error:', error);
-                app.showStatus('Errore inizializzazione camera', 'error');
+                if (!success) app.showStatus('Premi Start per avviare', 'warning');
             });
         };
 
         if (referenceImage) {
             referenceImage.onload = () => initializeCam(referenceImage);
-            referenceImage.onerror = () => initializeCam(null); // Fallback
+            referenceImage.onerror = () => initializeCam(null);
         } else {
-            initializeCam(null); // Avvia subito senza immagine
+            initializeCam(null);
         }
 
     }, 500);
 
 } catch (error) {
-    console.error('❌ Failed to initialize app:', error);
-    const statusElement = document.getElementById('statusMessage');
-    if (statusElement) {
-        statusElement.textContent = 'Errore di inizializzazione dell\'applicazione';
-        statusElement.className = 'ms-3 text-error';
-    }
+    console.error('❌ Init failed:', error);
 }
