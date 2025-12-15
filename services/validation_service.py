@@ -4,7 +4,6 @@ import numpy as np
 import logging
 from typing import Dict
 
-# Assicurati che i path siano corretti per il tuo progetto
 from processors.reference_processor import ReferenceProcessor
 from utils.sensor_utils import check_sensor_color
 
@@ -27,10 +26,9 @@ class ValidationService:
 
             session_id = request.form.get('session_id', 'default')
 
-            # Salvataggio in memoria (Attenzione: si perde se riavvii il server!)
             self.sessions[session_id] = {
                 'drawing_mask': result['drawing_mask_b64'],
-                'steps_config': result['steps_config'],  # Qui salviamo con la 's'
+                'steps_config': result['steps_config'],
                 'dims': result['dims']
             }
 
@@ -65,50 +63,45 @@ class ValidationService:
             if curr_img is None or ref_mask is None:
                 return {'success': False, 'error': 'Image Decode Error'}
 
-            # 2. Ridimensionamento dinamico (Webcam -> Reference)
+            # 2. Resize
             h_ref, w_ref = ref_mask.shape
             curr_img_resized = cv2.resize(curr_img, (w_ref, h_ref))
 
-            # 3. VERIFICA ALLINEAMENTO (Bordi)
+            # 3. VERIFICA ALLINEAMENTO (Logica Anti-Pavimento)
             alignment_score = self._check_alignment_edges(curr_img_resized, ref_mask)
-            is_aligned = alignment_score > 40.0
 
-            # 4. VERIFICA SENSORI
-            # CORRETTO: Uso 'steps_config' (plurale) come salvato nell'upload
+            # Soglia: 25% (Accessibile per la gamba, impossibile per il pavimento grazie al nuovo algoritmo)
+            is_aligned = alignment_score > 25.0
+
+            # 4. SENSORI
             steps_config = session.get('steps_config', {})
             target_sensors = steps_config.get(current_step_req, [])
-
             sensor_status = []
             present_cnt = 0
 
-            # Controlla i sensori solo se c'è una configurazione
             if steps_config:
                 if is_aligned:
-                    # Se l'utente è allineato, controlliamo i sensori specifici dello step
                     for step_key, s_list in steps_config.items():
                         is_curr_step = (str(step_key) == current_step_req)
                         for s in s_list:
-                            # Estrai ROI (Region of Interest)
                             x, y, r = s['x'], s['y'], s['r']
                             x1, y1 = max(0, x - r), max(0, y - r)
                             x2, y2 = min(w_ref, x + r), min(h_ref, y + r)
                             roi = curr_img_resized[y1:y2, x1:x2]
 
-                            # Check Colore
                             is_present = check_sensor_color(roi, threshold=0.015)
                             sensor_status.append({'id': s['id'], 'step': int(step_key), 'present': is_present})
 
                             if is_curr_step and is_present:
                                 present_cnt += 1
                 else:
-                    # Se NON è allineato, segna tutto come falso
                     for step_key, s_list in steps_config.items():
                         for s in s_list:
                             sensor_status.append({'id': s['id'], 'step': int(step_key), 'present': False})
 
-            # 5. CALCOLO MESSAGGI UI
+            # 5. UI FEEDBACK
             total_targets = len(target_sensors)
-            sensors_score = (present_cnt / total_targets * 100) if total_targets > 0 else 0
+            pct_sensors_found = (present_cnt / total_targets * 100) if total_targets > 0 else 0
 
             final_acc = 0
             msg = "..."
@@ -116,16 +109,27 @@ class ValidationService:
 
             if not is_aligned:
                 final_acc = alignment_score
-                msg = "Non allineato"
-                direct = "Sovrapponi la gamba al disegno"
-            elif sensors_score < 100:
-                final_acc = 70 + (sensors_score * 0.25)
-                msg = "Controllo Sensori"
-                direct = f"Mancano {total_targets - present_cnt} sensori"
+                # Feedback specifico se lo score è 0 (filtro anti-pavimento attivo)
+                if alignment_score < 5:
+                    msg = "Oggetto errato"
+                    direct = "Inquadra solo la gamba"
+                else:
+                    msg = "Migliora Allineamento"
+                    direct = "Segui i bordi del disegno"
             else:
-                final_acc = 98.0
-                msg = "Perfetto"
-                direct = "Tieni fermo per confermare"
+                if total_targets == 0:
+                    final_acc = 80.0
+                    msg = "Allineato"
+                    direct = "Attendo config..."
+                elif pct_sensors_found < 100:
+                    # Parte da 50 e sale a 98
+                    final_acc = 50.0 + (pct_sensors_found * 0.48)
+                    msg = "Controllo Sensori"
+                    direct = f"Trovati {present_cnt} su {total_targets}"
+                else:
+                    final_acc = 99.0
+                    msg = "Perfetto"
+                    direct = "Tieni fermo"
 
             return {
                 'success': True,
@@ -141,25 +145,65 @@ class ValidationService:
             return {'success': False, 'error': str(e)}
 
     def _check_alignment_edges(self, live_img_color, ref_mask_gray):
-        """Confronta i bordi webcam con maschera riferimento"""
+        """
+        Logica "Anti-Pavimento":
+        Confronta i bordi interni con quelli esterni.
+        Se l'esterno è caotico quanto l'interno, restituisce 0.
+        """
+        # 1. Edge Detection
         gray = cv2.cvtColor(live_img_color, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        live_edges = cv2.Canny(blurred, 50, 150)
+        # Soglie basse per vedere la pelle
+        live_edges = cv2.Canny(blurred, 30, 100)
 
-        # Tolleranza: dilata il riferimento
+        # 2. Creazione Zone
         kernel = np.ones((5, 5), np.uint8)
-        ref_mask_dilated = cv2.dilate(ref_mask_gray, kernel, iterations=1)
 
-        overlap = cv2.bitwise_and(live_edges, live_edges, mask=ref_mask_dilated)
+        # A) Zona Interna (Disegno)
+        mask_in = ref_mask_gray
 
-        live_edges_pixels = cv2.countNonZero(live_edges)
-        if live_edges_pixels == 0: return 0.0
+        # B) Zona Esterna "Lontana" (Rumore)
+        # Dilatiamo di ~40px. Tutto ciò che è fuori è sfondo puro.
+        mask_dilated = cv2.dilate(ref_mask_gray, kernel, iterations=20)
+        mask_outside = cv2.bitwise_not(mask_dilated)
 
-        matching_pixels = cv2.countNonZero(overlap)
-        score = (matching_pixels / live_edges_pixels) * 100
+        # 3. Conteggi
+        edges_in = cv2.countNonZero(cv2.bitwise_and(live_edges, live_edges, mask=mask_in))
+        edges_out = cv2.countNonZero(cv2.bitwise_and(live_edges, live_edges, mask=mask_outside))
 
-        # Boost dello score per UX
-        return min(100, score * 3.0)
+        # --- FILTRO 1: Densità Minima ---
+        # Se dentro è tutto nero (muro bianco, foglio), esci.
+        area_in = cv2.countNonZero(mask_in)
+        if area_in == 0: return 0.0
+        if (edges_in / area_in) < 0.005:
+            return 0.0  # Troppo liscio/vuoto
+
+        # --- FILTRO 2: KILL-SWITCH PAVIMENTO ---
+        # Questa è la chiave. Un pavimento ha bordi ovunque. Una gamba ha bordi dentro e sfondo vuoto fuori.
+        # Se i bordi fuori sono più numerosi dei bordi dentro, stai inquadrando una texture uniforme (pavimento).
+        if edges_out > edges_in:
+            return 0.0  # BOCCIATURA IMMEDIATA
+
+        # --- Calcolo Punteggio (Solo se superi i filtri) ---
+
+        # 1. Match sui bordi del disegno (Contour Matching)
+        # Creiamo il contorno del disegno (la linea nera)
+        ref_edges = cv2.Canny(ref_mask_gray, 50, 150)
+        ref_edges_fat = cv2.dilate(ref_edges, kernel, iterations=2)  # Spessore tolleranza
+
+        # Quanti bordi live cadono ESATTAMENTE sulla linea del disegno?
+        matching_pixels = cv2.countNonZero(cv2.bitwise_and(live_edges, live_edges, mask=ref_edges_fat))
+        total_ref_pixels = cv2.countNonZero(ref_edges)
+
+        if total_ref_pixels == 0: return 0.0
+
+        # Punteggio basato su quanto "ricalchi" il disegno
+        contour_score = (matching_pixels / total_ref_pixels) * 100
+
+        # Moltiplichiamo per un fattore (es. 2.5) perché non ricalcherai mai al 100%
+        final_score = min(100, contour_score * 2.5)
+
+        return final_score
 
     def _decode_base64_image(self, b64):
         if not b64: return None

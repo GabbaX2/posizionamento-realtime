@@ -3,160 +3,177 @@
 {% block title %}Validazione Step-by-Step{% endblock %}
 
 {% block content %}
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 relative">
+    <div class="fixed inset-0 z-[9999] bg-black lg:static lg:z-auto lg:bg-transparent lg:grid lg:grid-cols-12 lg:gap-8 lg:min-h-auto">
 
-        <div class="lg:col-span-8">
-            <div class="flex items-center justify-between mb-4 lg:mb-6">
-                <h2 class="text-xl lg:text-2xl font-bold text-white tracking-tight">Validazione</h2>
-                <div class="flex gap-2 lg:gap-3">
-                 <span id="stepStatus"
-                       class="hidden px-2 lg:px-3 py-1 rounded-full text-[10px] lg:text-xs font-bold bg-indigo-600 text-white border border-indigo-400 shadow-[0_0_10px_rgba(79,70,229,0.5)]">
+        <div class="relative w-full h-full lg:col-span-8 lg:h-auto lg:rounded-2xl lg:overflow-hidden lg:border lg:border-[#2e3054] lg:shadow-2xl">
+
+            <div class="absolute top-4 left-4 z-20 flex gap-2 lg:hidden">
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-black/60 text-white border border-white/20 backdrop-blur-md">
                     Step <span id="currentStepDisp">1</span>/<span id="totalStepsDisp">?</span>
                 </span>
-                    <span id="camStatus"
-                          class="px-2 lg:px-3 py-1 rounded-full text-[10px] lg:text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">Init...</span>
-                </div>
+                <span id="camStatus"
+                      class="px-3 py-1 rounded-full text-xs font-bold bg-red-900/80 text-red-200 border border-red-500/30 backdrop-blur-md">
+                    Init...
+                </span>
             </div>
 
-            <div class="bg-black rounded-2xl overflow-hidden shadow-2xl border border-[#2e3054] relative group">
+            <div class="video-container relative w-full h-full lg:aspect-video bg-black flex items-center justify-center">
+                <video id="videoElement" autoplay playsinline muted
+                       class="w-full h-full object-cover lg:object-contain"></video>
+                <canvas id="overlayCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
+            </div>
 
-                <div class="video-container relative w-full bg-black h-[75vh] lg:h-auto lg:aspect-video flex items-center justify-center">
-                    <video id="videoElement" autoplay playsinline muted class="w-full h-full object-contain"></video>
-                    <canvas id="overlayCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
-                </div>
+            <div id="finalSuccessOverlay"
+                 class="hidden absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-8 text-center">
+                <i class="bi bi-trophy-fill text-6xl text-yellow-400 mb-6 animate-bounce"></i>
+                <h3 class="text-3xl font-bold text-white mb-2">Ottimo Lavoro!</h3>
+                <p class="text-slate-400 mb-8">Hai completato tutti gli step.</p>
+                <button onclick="location.reload()"
+                        class="px-8 py-4 bg-indigo-600 rounded-xl text-white font-bold w-full max-w-xs shadow-lg shadow-indigo-500/30">
+                    Nuova Sessione
+                </button>
+            </div>
 
-                <div class="accuracy-panel hidden absolute bottom-0 left-0 w-full lg:w-auto lg:top-4 lg:right-4 lg:bottom-auto lg:left-auto bg-gradient-to-t from-black via-black/80 to-transparent lg:bg-gradient-to-r lg:from-indigo-900/90 lg:to-purple-900/90 backdrop-blur-sm lg:backdrop-blur-md p-4 lg:rounded-xl border-t lg:border border-indigo-500/30 transition-all duration-300 z-10"
-                     id="accuracyPanel">
-
-                    <div class="flex items-center justify-center lg:justify-start gap-4">
-                        <div class="relative w-14 h-14 lg:w-16 lg:h-16 flex-shrink-0">
-                            <svg class="w-full h-full transform -rotate-90">
-                                <circle cx="50%" cy="50%" r="45%" stroke="currentColor" stroke-width="4" fill="transparent"
-                                        class="text-slate-700"/>
-                                <circle id="lockProgressRing" cx="50%" cy="50%" r="45%" stroke="currentColor"
-                                        stroke-width="4" fill="transparent"
-                                        class="text-green-400 transition-all duration-200" stroke-dasharray="175"
-                                        stroke-dashoffset="175"/>
-                            </svg>
-                            <div class="absolute inset-0 flex items-center justify-center">
-                                <span class="text-sm font-bold text-white" id="accuracyValue">0%</span>
-                            </div>
+            <div class="absolute bottom-0 left-0 right-0 z-40
+                        bg-gradient-to-t from-black via-black/95 to-transparent pt-12 pb-8 px-6
+                        flex flex-col gap-6 items-center
+                        lg:hidden">
+                <div id="accuracyPanelMobile"
+                     class="hidden flex flex-col items-center gap-2 w-full animate-in slide-in-from-bottom-10 fade-in duration-300">
+                    <div class="relative w-20 h-20">
+                        <svg class="w-full h-full transform -rotate-90 drop-shadow-lg">
+                            <circle cx="50%" cy="50%" r="45%" stroke="#334155" stroke-width="6" fill="transparent"/>
+                            <circle id="lockProgressRingMob" cx="50%" cy="50%" r="45%" stroke="#4ade80" stroke-width="6"
+                                    fill="transparent"
+                                    stroke-dasharray="283" stroke-dashoffset="283" stroke-linecap="round"
+                                    class="transition-all duration-300"/>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <span class="text-xl font-bold text-white" id="accuracyValueMob">0%</span>
                         </div>
-                        <div class="text-center lg:text-left shadow-black drop-shadow-md">
-                            <h5 class="text-indigo-300 text-[10px] lg:text-xs uppercase tracking-wider font-semibold mb-0 lg:mb-1"
-                                id="groupActionText">Allineamento</h5>
-                            <p class="text-lg lg:text-xl font-bold text-white leading-tight" id="accuracyMessage">In attesa...</p>
-                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <h3 class="text-2xl font-bold text-white leading-none mb-1" id="accuracyMessageMob">...</h3>
+                        <p class="text-sm text-indigo-300 uppercase tracking-widest font-semibold"
+                           id="groupActionTextMob">In Attesa</p>
                     </div>
                 </div>
 
-                <div id="finalSuccessOverlay"
-                     class="hidden absolute inset-0 bg-gradient-to-b from-black/90 to-green-900/60 backdrop-blur-md flex items-center justify-center z-30">
-                    <div class="text-center p-8 bg-[#161831] border border-green-500/50 rounded-2xl shadow-2xl transform scale-110 mx-4">
-                        <i class="bi bi-trophy-fill text-6xl text-yellow-400 mb-4 inline-block drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]"></i>
-                        <h3 class="text-3xl font-bold text-white">Validazione Terminata</h3>
-                        <p class="text-slate-300 mt-4 mb-6">Tutti gli step completati.</p>
-                        <button onclick="location.reload()"
-                                class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition w-full lg:w-auto">
-                            Nuova Sessione
-                        </button>
-                    </div>
-                </div>
-            </div>
+                <div class="w-full flex gap-3">
+                    <button id="startBtnMob"
+                            class="flex-1 py-4 bg-green-600 hover:bg-green-500 active:scale-95 text-white rounded-2xl font-bold text-lg shadow-lg shadow-green-900/40 transition-all flex justify-center items-center gap-2">
+                        <i class="bi bi-play-fill text-2xl"></i> AVVIA
+                    </button>
 
-            <div class="mt-4 lg:mt-6 flex flex-wrap gap-3 items-center bg-[#161831] p-3 lg:p-4 rounded-xl border border-[#2e3054]">
+                    <button id="stopBtnMob"
+                            class="hidden flex-1 py-4 bg-red-600 hover:bg-red-500 active:scale-95 text-white rounded-2xl font-bold text-lg shadow-lg shadow-red-900/40 transition-all flex justify-center items-center gap-2">
+                        <i class="bi bi-stop-fill text-2xl"></i> STOP
+                    </button>
 
-                <button id="startBtn"
-                        class="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg shadow-green-900/20 transition-all flex justify-center items-center gap-2 text-sm lg:text-base">
-                    <i class="bi bi-play-fill text-xl"></i> AVVIA
-                </button>
-
-                <button id="stopBtn"
-                        class="hidden flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold shadow-lg shadow-red-900/20 transition-all flex justify-center items-center gap-2 text-sm lg:text-base">
-                    <i class="bi bi-stop-fill text-xl"></i> FERMA
-                </button>
-
-                <div class="w-full lg:w-auto flex justify-center lg:ml-auto">
-                    <button id="skipGroupBtn"
-                            class="hidden text-slate-400 hover:text-white text-sm underline decoration-slate-600 underline-offset-4 py-2">
-                        Salta Step <i class="bi bi-skip-forward-fill"></i>
+                    <button id="skipBtnMob"
+                            class="px-4 py-4 bg-white/10 hover:bg-white/20 text-slate-300 rounded-2xl font-medium backdrop-blur-md hidden">
+                        <i class="bi bi-skip-forward-fill text-xl"></i>
                     </button>
                 </div>
             </div>
-        </div>
 
-        <div class="lg:col-span-4 space-y-6">
-            <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
-                <h4 class="text-white font-semibold mb-4 flex items-center gap-2">
-                    <i class="bi bi-image text-indigo-400"></i> Riferimento
-                </h4>
-                <div id="referencePreview">
-                    <div class="text-center py-8 border-2 border-dashed border-slate-700 rounded-xl">
-                        <h5 class="text-white mt-2 font-medium">Caricamento...</h5>
-                    </div>
+            <div class="hidden lg:flex justify-between items-center bg-[#161831] p-4 mt-4 border border-[#2e3054] rounded-xl">
+                <div class="flex gap-4 items-center">
+                    <div class="text-white font-bold text-xl" id="accuracyValueDesk">0%</div>
+                    <div class="text-slate-400 text-sm" id="accuracyMessageDesk">In attesa...</div>
+                </div>
+                <div class="flex gap-3">
+                    <button id="startBtnDesk"
+                            class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold">AVVIA
+                    </button>
+                    <button id="stopBtnDesk"
+                            class="hidden px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold">STOP
+                    </button>
+                    <button id="skipBtnDesk" class="text-slate-400 underline text-sm px-4">Salta</button>
                 </div>
             </div>
 
+        </div>
+
+        <div class="hidden lg:block lg:col-span-4 space-y-6">
             <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
-                <h5 class="text-white font-semibold mb-4 border-b border-[#2e3054] pb-2">Stato Sessione</h5>
-                <div class="space-y-3">
-                    <div class="flex justify-between items-center p-3 bg-[#0f1021] rounded-lg">
-                        <strong class="text-slate-400 text-sm">Step Totali:</strong>
-                        <span id="sessionTotalSteps" class="text-indigo-400 font-mono font-bold">-</span>
-                    </div>
-                    <div class="w-full bg-slate-800 rounded-full h-2.5 mt-2">
-                        <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
-                    </div>
+                <h4 class="text-white font-semibold mb-4">Riferimento</h4>
+                <div id="referencePreview" class="opacity-70"></div>
+            </div>
+            <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
+                <h5 class="text-white font-semibold mb-2">Progresso</h5>
+                <div class="w-full bg-slate-800 rounded-full h-2">
+                    <div id="progressBar" class="bg-indigo-600 h-2 rounded-full" style="width: 0%"></div>
                 </div>
             </div>
         </div>
+
     </div>
 {% endblock %}
 
 {% block scripts %}
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-
     <script>
-        // --- VARIABILI GLOBALI ---
-        let cleanReferenceImage = null;
-        let validationOverlayImage = null;
-        let stepsConfig = null;
+        // Sincronizziamo gli ID mobili e desktop
+        const UI = {
+            mob: {
+                start: document.getElementById('startBtnMob'),
+                stop: document.getElementById('stopBtnMob'),
+                skip: document.getElementById('skipBtnMob'),
+                accPanel: document.getElementById('accuracyPanelMobile'),
+                accVal: document.getElementById('accuracyValueMob'),
+                accMsg: document.getElementById('accuracyMessageMob'),
+                dirMsg: document.getElementById('groupActionTextMob'),
+                ring: document.getElementById('lockProgressRingMob')
+            },
+            desk: {
+                start: document.getElementById('startBtnDesk'),
+                stop: document.getElementById('stopBtnDesk'),
+                skip: document.getElementById('skipBtnDesk'),
+                accVal: document.getElementById('accuracyValueDesk'),
+                accMsg: document.getElementById('accuracyMessageDesk')
+            }
+        };
 
-        let overlayOpacity = 0.7; // Default 70%
-
+        // Variabili Logica (Identiche a prima)
         let isCameraActive = false;
         let isValidating = false;
-        let validationIntervalId = null;
-
         let currentStep = 1;
         let totalSteps = 1;
-
+        let stepsConfig = {};
+        let validationIntervalId = null;
         let targetAccuracy = 0;
         let displayedAccuracy = 0;
         let sensorsRealtimeStatus = {};
 
+        // Immagini
+        let cleanReferenceImage = null;
+        let validationOverlayImage = null;
+
+        // Elementi Base
         const video = document.getElementById('videoElement');
         const canvas = document.getElementById('overlayCanvas');
-        const ctx = canvas ? canvas.getContext('2d') : null;
-        const CIRCUMFERENCE = 283;
+        const ctx = canvas.getContext('2d');
+        const CIRCUMFERENCE = 283; // 2 * PI * 45
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSession();
 
-            document.getElementById('startBtn').onclick = startValidation;
-            document.getElementById('stopBtn').onclick = stopValidation;
+            // Event Listeners Mobile
+            UI.mob.start.onclick = startValidation;
+            UI.mob.stop.onclick = stopValidation;
+            UI.mob.skip.onclick = nextStep;
 
-            const skipBtn = document.getElementById('skipGroupBtn');
-            if (skipBtn) skipBtn.onclick = () => nextStep();
-
-            const ring = document.getElementById('lockProgressRing');
-            if(ring) {
-                ring.style.strokeDasharray = CIRCUMFERENCE;
-                ring.style.strokeDashoffset = CIRCUMFERENCE;
-            }
+            // Event Listeners Desktop (Mirroring)
+            UI.desk.start.onclick = startValidation;
+            UI.desk.stop.onclick = stopValidation;
+            UI.desk.skip.onclick = nextStep;
 
             requestAnimationFrame(animateValues);
         });
+
+        // --- LOGICA IDENTICA A PRIMA MA CON AGGIORNAMENTO UI DOPPIO ---
 
         function loadSession() {
             const refSrc = localStorage.getItem('cleanReferenceImage');
@@ -164,45 +181,33 @@
             const meta = localStorage.getItem('referenceMetadata');
 
             if (refSrc && ovlSrc && meta) {
-                cleanReferenceImage = new Image();
-                cleanReferenceImage.src = refSrc;
-
                 validationOverlayImage = new Image();
                 validationOverlayImage.src = ovlSrc;
 
-                let metadata;
-                try {
-                    metadata = JSON.parse(meta);
-                } catch (e) {
-                    return;
-                }
+                // Preview desktop
+                const img = new Image();
+                img.src = ovlSrc;
+                img.className = "w-full rounded-lg";
+                document.getElementById('referencePreview').appendChild(img);
 
+                let metadata = JSON.parse(meta);
                 stepsConfig = metadata.steps_config || {};
-                const dictLen = Object.keys(stepsConfig).length;
-                totalSteps = dictLen > 0 ? dictLen : 1;
+                totalSteps = Object.keys(stepsConfig).length || 1;
 
                 document.getElementById('totalStepsDisp').innerText = totalSteps;
-                document.getElementById('sessionTotalSteps').innerText = totalSteps;
 
-                document.getElementById('referencePreview').innerHTML = `
-                <div class="bg-black p-2 rounded border border-slate-700">
-                    <img src="${ovlSrc}" class="w-full h-auto opacity-80" alt="Riferimento">
-                </div>`;
-
-                validationOverlayImage.onload = () => {
-                    initCamera();
-                };
-                document.getElementById('startBtn').disabled = false;
+                validationOverlayImage.onload = () => initCamera();
             }
         }
 
         async function initCamera() {
             if (isCameraActive || !window.sensorApp) return;
             await window.sensorApp.initializeCameraWithAdaptiveResolution(null, validationOverlayImage);
-
             isCameraActive = true;
-            document.getElementById('camStatus').innerText = "Camera OK";
-            document.getElementById('camStatus').className = "px-3 py-1 rounded-full text-xs font-semibold bg-green-900 text-green-200 border border-green-700";
+
+            const badge = document.getElementById('camStatus');
+            badge.innerText = "Camera ON";
+            badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-green-900/80 text-green-200 border border-green-500/30 backdrop-blur-md";
 
             requestAnimationFrame(drawLoop);
         }
@@ -211,54 +216,62 @@
             if (!isCameraActive) return;
             isValidating = true;
             currentStep = 1;
-            updateUI();
 
-            document.getElementById('stepStatus').classList.remove('hidden');
-            document.getElementById('skipGroupBtn').classList.remove('hidden');
+            // Toggle Buttons Mobile
+            UI.mob.start.classList.add('hidden');
+            UI.mob.stop.classList.remove('hidden');
+            UI.mob.skip.classList.remove('hidden'); // Mostra skip
+            UI.mob.accPanel.classList.remove('hidden'); // Mostra pannello accuracy
 
-            // --- MODIFICA LOGICA BOTTONI ---
-            // Nascondo START, mostro STOP
-            document.getElementById('startBtn').classList.add('hidden');
-            document.getElementById('stopBtn').classList.remove('hidden');
+            // Toggle Buttons Desktop
+            UI.desk.start.classList.add('hidden');
+            UI.desk.stop.classList.remove('hidden');
 
+            updateStepDisplay();
             validationIntervalId = setInterval(validateBackend, 500);
         }
 
         function stopValidation() {
             isValidating = false;
             clearInterval(validationIntervalId);
-            document.getElementById('accuracyPanel').classList.add('hidden');
-            document.getElementById('stepStatus').classList.add('hidden');
-            document.getElementById('skipGroupBtn').classList.add('hidden');
+
             document.getElementById('finalSuccessOverlay').classList.remove('hidden');
 
-            // --- MODIFICA LOGICA BOTTONI ---
-            // Nascondo STOP, mostro START (anche se c'è l'overlay finale, è utile resettare)
-            document.getElementById('stopBtn').classList.add('hidden');
-            document.getElementById('startBtn').classList.remove('hidden');
-            // Opzionale: se c'è l'overlay di successo, potresti voler disabilitare Start finché non ricaricano
-            // Ma per ora li scambiamo semplicemente
+            UI.mob.accPanel.classList.add('hidden');
+            UI.mob.stop.classList.add('hidden');
+            UI.mob.skip.classList.add('hidden');
+        }
+
+        function nextStep() {
+            currentStep++;
+            if (currentStep > totalSteps) stopValidation();
+            else updateStepDisplay();
+        }
+
+        function updateStepDisplay() {
+            document.getElementById('currentStepDisp').innerText = currentStep;
+            // Aggiorna progress bar desktop
+            const pct = ((currentStep - 1) / totalSteps) * 100;
+            document.getElementById('progressBar').style.width = pct + "%";
         }
 
         async function validateBackend() {
             if (!isValidating) return;
-
+            // Crea frame
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = video.videoWidth;
             tempCanvas.height = video.videoHeight;
             tempCanvas.getContext('2d').drawImage(video, 0, 0);
-            const frame = tempCanvas.toDataURL('image/jpeg', 0.6);
+            const frame = tempCanvas.toDataURL('image/jpeg', 0.5); // Compressione
 
-            const metaString = localStorage.getItem('referenceMetadata');
-            if (!metaString) return;
-            const meta = JSON.parse(metaString);
+            const meta = JSON.parse(localStorage.getItem('referenceMetadata'));
 
             try {
                 const res = await fetch('/api/validate_frame', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        session_id: meta.session_id || 'default',
+                        session_id: meta.session_id,
                         current_frame: frame,
                         current_step: currentStep
                     })
@@ -268,18 +281,16 @@
                 if (data.success) {
                     targetAccuracy = data.accuracy;
 
-                    document.getElementById('accuracyMessage').innerText = data.message;
-                    document.getElementById('groupActionText').innerText = data.direction || "Allineamento";
-                    document.getElementById('accuracyPanel').classList.remove('hidden');
+                    // Aggiorna UI Mobile
+                    UI.mob.accMsg.innerText = data.message; // "Perfetto"
+                    UI.mob.dirMsg.innerText = data.direction; // "Tieni fermo..."
+
+                    // Aggiorna UI Desktop
+                    UI.desk.accMsg.innerText = data.message;
+                    UI.desk.accVal.innerText = Math.round(data.accuracy) + "%";
 
                     if (data.sensors_status) {
                         data.sensors_status.forEach(s => sensorsRealtimeStatus[s.id] = s.present);
-                    }
-                } else {
-                    console.warn("Backend Error:", data.error);
-                    if (data.error === 'Session Expired') {
-                        alert("Sessione scaduta.");
-                        stopValidation();
                     }
                 }
             } catch (e) {
@@ -287,44 +298,57 @@
             }
         }
 
-        function nextStep() {
-            currentStep++;
-            if (currentStep > totalSteps) stopValidation();
-            else updateUI();
-        }
-
+        // Animazione cerchio e numeri
         function animateValues() {
             if (Math.abs(targetAccuracy - displayedAccuracy) > 0.5) {
                 displayedAccuracy += (targetAccuracy - displayedAccuracy) * 0.1;
             } else {
                 displayedAccuracy = targetAccuracy;
             }
-            document.getElementById('accuracyValue').innerText = Math.round(displayedAccuracy) + '%';
 
-            const progress = Math.min(Math.round(displayedAccuracy) / 100, 1);
-            const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
+            const valStr = Math.round(displayedAccuracy) + '%';
+            UI.mob.accVal.innerText = valStr;
 
-            const ring = document.getElementById('lockProgressRing');
-            if(ring) ring.style.strokeDashoffset = offset;
+            // Cerchio SVG
+            const offset = CIRCUMFERENCE - ((displayedAccuracy / 100) * CIRCUMFERENCE);
+            if (UI.mob.ring) UI.mob.ring.style.strokeDashoffset = offset;
+
+            // Colore dinamico anello
+            const color = displayedAccuracy > 90 ? '#4ade80' : (displayedAccuracy > 50 ? '#facc15' : '#f87171');
+            if (UI.mob.ring) UI.mob.ring.style.stroke = color;
 
             requestAnimationFrame(animateValues);
         }
 
+        // --- DRAW LOOP (Overlay Disegno + Sensori) ---
         function drawLoop() {
             if (!isCameraActive) return;
-            resizeCanvas();
+
+            // Resize canvas se necessario
+            if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
+                canvas.width = video.clientWidth;
+                canvas.height = video.clientHeight;
+            }
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.globalAlpha = overlayOpacity;
+            // Calcola dimensioni per mantenere aspect ratio immagine overlay
             const dims = getDrawDimensions(canvas.width, canvas.height, validationOverlayImage);
+
+            // Disegna Overlay (Gamba)
+            ctx.globalAlpha = 0.5; // Opacità overlay
             if (validationOverlayImage) ctx.drawImage(validationOverlayImage, dims.x, dims.y, dims.w, dims.h);
 
+            // Disegna cerchi sensori
             if (isValidating && stepsConfig) {
                 const scale = dims.w / validationOverlayImage.naturalWidth;
+
                 Object.keys(stepsConfig).forEach(stepKey => {
                     const stepNum = parseInt(stepKey);
-                    const sensors = stepsConfig[stepKey];
+                    // Disegna solo step corrente o passati? Decidi tu. Qui disegno corrente.
+                    if (stepNum !== currentStep) return;
 
+                    const sensors = stepsConfig[stepKey];
                     sensors.forEach(s => {
                         const cx = dims.x + (s.x * scale);
                         const cy = dims.y + (s.y * scale);
@@ -332,29 +356,11 @@
                         const isPresent = sensorsRealtimeStatus[s.id];
 
                         ctx.lineWidth = 3;
-                        if (stepNum < currentStep) {
-                            ctx.globalAlpha = 0.5;
-                            ctx.strokeStyle = '#22c55e';
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                            ctx.stroke();
-                        } else if (stepNum === currentStep) {
-                            ctx.globalAlpha = 1.0;
-                            if (isPresent) {
-                                ctx.strokeStyle = '#00FF00';
-                                ctx.shadowBlur = 15;
-                                ctx.shadowColor = '#00FF00';
-                                ctx.beginPath();
-                                ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                                ctx.stroke();
-                                ctx.shadowBlur = 0;
-                            } else {
-                                ctx.strokeStyle = (displayedAccuracy < 50) ? '#94a3b8' : '#FACC15';
-                                ctx.beginPath();
-                                ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                                ctx.stroke();
-                            }
-                        }
+                        ctx.globalAlpha = 0.9;
+                        ctx.strokeStyle = isPresent ? '#00FF00' : '#FF0000';
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                        ctx.stroke();
                     });
                 });
             }
@@ -363,28 +369,30 @@
 
         function getDrawDimensions(cw, ch, img) {
             if (!img) return {x: 0, y: 0, w: 0, h: 0};
-            const iw = img.naturalWidth;
-            const ih = img.naturalHeight;
-            const scale = Math.min(cw / iw, ch / ih);
-            const w = iw * scale;
-            const h = ih * scale;
-            return {x: (cw - w) / 2, y: (ch - h) / 2, w: w, h: h};
-        }
+            // Per mobile (object-cover) la logica cambia leggermente se vogliamo che l'overlay segua il video croppato
+            // Ma per semplicità qui usiamo contain logic adattata, o cover logic:
 
-        function resizeCanvas() {
-            if (video) {
-                if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
-                     canvas.width = video.clientWidth;
-                     canvas.height = video.clientHeight;
-                }
+            const imgRatio = img.naturalWidth / img.naturalHeight;
+            const canvasRatio = cw / ch;
+
+            let w, h;
+
+            // Se usiamo object-cover nel CSS video, dobbiamo simulare lo stesso crop nel canvas
+            if (canvasRatio > imgRatio) {
+                w = cw;
+                h = cw / imgRatio;
+            } else {
+                h = ch;
+                w = ch * imgRatio;
             }
-        }
 
-        function updateUI() {
-            document.getElementById('currentStepDisp').innerText = currentStep;
-            const pct = ((currentStep - 1) / totalSteps) * 100;
-            const bar = document.getElementById('progressBar');
-            if(bar) bar.style.width = pct + '%';
+            // Centriamo
+            return {
+                x: (cw - w) / 2,
+                y: (ch - h) / 2,
+                w: w,
+                h: h
+            };
         }
     </script>
 {% endblock %}

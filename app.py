@@ -175,4 +175,4 @@ if __name__ == '__main__':
     # Rimuoviamo cartelle vecchie non più usate dal nuovo approccio
 
     print("\n🚀 Avvio applicazione Flask...")
-    app.run(host='0.0.0.0', port=6321)
+    app.run(host='0.0.0.0', port=5000)
