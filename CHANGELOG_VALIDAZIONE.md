@@ -1,3 +1,82 @@
+# Sistema di Validazione - Changelog
+
+---
+
+## v3.0 - Overlay Semi-Trasparente + Rilevamento Cerchi (24 Dicembre 2024)
+
+### Descrizione
+Nuovo approccio di validazione basato su:
+1. **Overlay Reference**: Il disegno include la **gamba con ~15% opacity** (non solo il contorno)
+2. **Template Matching**: Confronto template per verificare allineamento zona
+3. **HoughCircles**: Rileva **cerchi fisici** con HoughCircles e verifica se sono **concentrici** ai cerchi del disegno
+
+### Modifiche Reference Processor (`processors/reference_processor.py`)
+
+**Nuovo sistema overlay BGRA:**
+- Crea overlay 4 canali (BGRA) invece di semplice maschera BGR
+- La gamba viene inclusa con 15% di opacità per template matching
+- Contorno gamba, cerchi sensori e testo hanno alpha pieno (255)
+- Nuovo metodo `_to_b64_rgba()` per esportare PNG con canale alpha
+
+**Nuovo output:**
+```python
+{
+    'drawing_overlay_b64': '...',  # Nuovo: PNG con alpha
+    'sensor_circles': [             # Nuovo: Lista flat sensori
+        {'id': 1, 'x': 100, 'y': 150, 'r': 30, 'group': 1},
+        ...
+    ]
+}
+```
+
+### Modifiche Validation Service (`services/validation_service.py`)
+
+**Nuovi metodi:**
+
+1. `_check_zone_alignment(live_frame, reference_overlay)`:
+   - Template matching per verificare posizionamento gamba
+   - Usa finestra centrale del reference come template
+   - Soglia: 0.55 (55% correlazione) per lock
+
+2. `_detect_and_verify_sensors(live_frame, sensor_circles_ref)`:
+   - HoughCircles per rilevare cerchi nel frame live
+   - Verifica concentricità: distanza centri < 25px
+   - Restituisce stato per ogni sensore di riferimento
+
+3. `_generate_group_feedback(sensor_results, steps_config, current_step)`:
+   - Genera feedback specifico per gruppo di sensori
+   - "Manca 1 sensore nel gruppo" / "Mancano N sensori, posizionarli"
+
+**Nuova risposta API:**
+```json
+{
+    "success": true,
+    "accuracy": 85.0,
+    "is_locked": true,
+    "zone_match": 68.5,
+    "message": "Zona OK",
+    "direction": "Manca 1 sensore nel gruppo",
+    "group_feedback": "Manca 1 sensore nel gruppo",
+    "sensors_status": [...]
+}
+```
+
+### Modifiche Frontend (`templates/validation.html`)
+
+**Fase NON Locked:**
+- Overlay con opacity 50% (maggiore per vedere la gamba)
+- Cornice arancione tratteggiata
+- Label: "🔴 SOVRAPPONI LA GAMBA ALL'OVERLAY"
+- Mostra percentuale match zona
+
+**Fase Locked:**
+- Cornice verde solida con ombra
+- Badge: "✅ ZONA VALIDATA - {group_feedback}"
+- Sensori mancanti: cerchi rossi pulsanti con "?"
+- Sensori trovati: cerchi verdi con ombra
+
+---
+
 # Miglioramenti Sistema di Validazione - Contorno Preciso
 
 ## Panoramica

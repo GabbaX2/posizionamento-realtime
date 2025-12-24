@@ -148,8 +148,8 @@
 
     // STATI NUOVI LOGICA A FASI
     let isLocked = false;
-    let liveContourPoints = [];
-    let shapeMatchScore = 0; // Nuova metrica per similarità forma
+    let zoneMatchScore = 0;  // Percentuale match zona (template matching)
+    let groupFeedback = '';  // Feedback specifico per gruppo sensori
 
     // Immagini
     let cleanReferenceImage = null;
@@ -273,8 +273,8 @@
             if (data.success) {
                 targetAccuracy = data.accuracy;
                 isLocked = data.is_locked;
-                liveContourPoints = data.live_contour || [];
-                shapeMatchScore = data.shape_match || 0;
+                zoneMatchScore = data.zone_match || 0;
+                groupFeedback = data.group_feedback || '';
 
                 UI.mob.accMsg.innerText = data.message;
                 UI.mob.dirMsg.innerText = data.direction;
@@ -325,58 +325,40 @@
         const dims = getDrawDimensions(canvas.width, canvas.height, validationOverlayImage);
         const scale = dims.w / validationOverlayImage.naturalWidth;
 
-        // --- FASE 1: DISEGNO NON ALLINEATO (Mostra overlay + contorni) ---
+        // --- FASE 1: DISEGNO NON ALLINEATO (Mostra overlay con gamba semi-trasparente) ---
         if (!isLocked) {
-            // Overlay Disegno di riferimento: Semi-trasparente bianco
+            // Overlay Disegno di riferimento: Include gamba semi-trasparente
             ctx.save();
-            ctx.globalAlpha = 0.35;
+            ctx.globalAlpha = 0.5;  // Aumentato per vedere meglio l'overlay con gamba
             if (validationOverlayImage) ctx.drawImage(validationOverlayImage, dims.x, dims.y, dims.w, dims.h);
             ctx.restore();
 
-            // Contorno di riferimento: Linea tratteggiata verde per guida
+            // Cornice di riferimento: Linea tratteggiata arancione per guida
             ctx.save();
-            ctx.strokeStyle = '#22c55e';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([10, 5]);
+            ctx.strokeStyle = '#ff9500';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([12, 6]);
             ctx.strokeRect(dims.x, dims.y, dims.w, dims.h);
             ctx.restore();
 
-            // Live Contour: Linea ROSSA che segue la gamba real-time
-            if (liveContourPoints.length > 0) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.lineWidth = 4;
-                ctx.strokeStyle = '#ef4444'; // ROSSO
-                ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
-                ctx.shadowBlur = 10;
-                ctx.lineJoin = 'round';
-
-                liveContourPoints.forEach((pt, index) => {
-                    const cx = dims.x + (pt[0] * scale);
-                    const cy = dims.y + (pt[1] * scale);
-                    if (index === 0) ctx.moveTo(cx, cy);
-                    else ctx.lineTo(cx, cy);
-                });
-
-                ctx.closePath();
-                ctx.stroke();
-                ctx.restore();
-
-                // Label con istruzioni
-                ctx.save();
-                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-                ctx.fillRect(dims.x + 5, dims.y + 5, 280, 40);
-                ctx.fillStyle = "#ef4444";
-                ctx.font = "bold 16px sans-serif";
-                ctx.fillText("🔴 ALLINEA IL CONTORNO ROSSO", dims.x + 15, dims.y + 28);
-                ctx.fillStyle = "#ffffff";
-                ctx.font = "12px sans-serif";
-                ctx.fillText("Sovrapponi al disegno verde", dims.x + 15, dims.y + 45);
-                ctx.restore();
+            // Label con istruzioni di allineamento
+            ctx.save();
+            ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+            ctx.fillRect(dims.x + 5, dims.y + 5, 320, 50);
+            ctx.fillStyle = "#ff9500";
+            ctx.font = "bold 16px sans-serif";
+            ctx.fillText("🔴 SOVRAPPONI LA GAMBA ALL'OVERLAY", dims.x + 15, dims.y + 28);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "13px sans-serif";
+            if (zoneMatchScore > 0) {
+                ctx.fillText(`Match zona: ${Math.round(zoneMatchScore)}% | Soglia: 55%`, dims.x + 15, dims.y + 47);
+            } else {
+                ctx.fillText("Posiziona la gamba nella sagoma arancione", dims.x + 15, dims.y + 47);
             }
+            ctx.restore();
         }
 
-        // --- FASE 2: DISEGNO LOCKED (ALLINEATO) - Mostra solo sensori ---
+        // --- FASE 2: DISEGNO LOCKED (ZONA VALIDATA) - Mostra sensori ---
         else {
             // Cornice Verde SOLIDA per confermare il lock
             ctx.save();
@@ -387,13 +369,18 @@
             ctx.strokeRect(dims.x, dims.y, dims.w, dims.h);
             ctx.restore();
 
-            // Badge di conferma lock
+            // Badge di conferma lock con feedback gruppo
             ctx.save();
             ctx.fillStyle = "rgba(34, 197, 94, 0.9)";
-            ctx.fillRect(dims.x + 5, dims.y + 5, 250, 35);
+            const badgeWidth = groupFeedback.length > 20 ? 350 : 280;
+            ctx.fillRect(dims.x + 5, dims.y + 5, badgeWidth, 35);
             ctx.fillStyle = "#ffffff";
             ctx.font = "bold 14px sans-serif";
-            ctx.fillText("✅ CONTORNO VALIDATO - SCANSIONE...", dims.x + 15, dims.y + 27);
+            if (groupFeedback) {
+                ctx.fillText(`✅ ZONA VALIDATA - ${groupFeedback}`, dims.x + 15, dims.y + 27);
+            } else {
+                ctx.fillText("✅ ZONA VALIDATA - VERIFICA SENSORI...", dims.x + 15, dims.y + 27);
+            }
             ctx.restore();
 
             // Disegna Sensori con cerchi pulsanti
@@ -414,13 +401,16 @@
 
                         ctx.save();
                         ctx.lineWidth = isPresent ? 4 : 2;
-                        ctx.strokeStyle = isPresent ? '#00FF00' : '#FFD700';
-                        ctx.fillStyle = isPresent ? 'rgba(0, 255, 0, 0.4)' : 'rgba(255, 215, 0, 0.2)';
+                        ctx.strokeStyle = isPresent ? '#00FF00' : '#ff6b6b';  // Rosso più visibile per mancanti
+                        ctx.fillStyle = isPresent ? 'rgba(0, 255, 0, 0.4)' : 'rgba(255, 107, 107, 0.2)';
 
                         // Ombra per sensori trovati
                         if (isPresent) {
                             ctx.shadowColor = 'rgba(0, 255, 0, 0.8)';
                             ctx.shadowBlur = 15;
+                        } else {
+                            ctx.shadowColor = 'rgba(255, 107, 107, 0.6)';
+                            ctx.shadowBlur = 10;
                         }
 
                         ctx.beginPath();
@@ -428,6 +418,16 @@
                         ctx.fill();
                         ctx.stroke();
                         ctx.restore();
+
+                        // Etichetta per sensori mancanti
+                        if (!isPresent) {
+                            ctx.save();
+                            ctx.fillStyle = '#ff6b6b';
+                            ctx.font = 'bold 12px sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('?', cx, cy + 4);
+                            ctx.restore();
+                        }
                     });
                 });
             }

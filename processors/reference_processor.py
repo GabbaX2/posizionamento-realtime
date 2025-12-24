@@ -46,12 +46,14 @@ class ReferenceProcessor:
             if pil_out:
                 img_bgra = cv2.cvtColor(np.array(pil_out), cv2.COLOR_RGBA2BGRA)
 
-        drawing_mask, steps_config = self._analyze_image(img_bgra)
+        drawing_overlay, steps_config, sensor_circles = self._analyze_image(img_bgra)
 
         return {
             'success': True,
             'reference_clean_b64': self._to_b64(img_bgra[:, :, :3]),
-            'drawing_mask_b64': self._to_b64(drawing_mask),
+            'drawing_mask_b64': self._to_b64(drawing_overlay[:, :, :3]),  # Retrocompatibilità
+            'drawing_overlay_b64': self._to_b64_rgba(drawing_overlay),  # Nuovo: con alpha
+            'sensor_circles': sensor_circles,  # Lista di {id, x, y, r, group}
             'steps_config': steps_config,
             'dims': (img_bgra.shape[0], img_bgra.shape[1])
         }
@@ -66,11 +68,26 @@ class ReferenceProcessor:
         comp_image[mask_leg] = img_bgra[mask_leg, :3]
         gray = cv2.cvtColor(comp_image, cv2.COLOR_BGR2GRAY)
 
-        # Disegno contorno gamba
+        # Trova contorno gamba
         _, thresh = cv2.threshold(alpha, 127, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        drawing_mask = np.zeros((h, w, 3), dtype=np.uint8)
-        cv2.drawContours(drawing_mask, contours, -1, self.DRAWING_COLOR, 2)
+        
+        # --- CREA OVERLAY BGRA CON GAMBA SEMI-TRASPARENTE (15% OPACITY) ---
+        drawing_overlay = np.zeros((h, w, 4), dtype=np.uint8)  # BGRA con alpha
+        
+        # Aggiungi la gamba con bassa opacità
+        leg_mask = alpha > 0
+        for c in range(3):  # BGR
+            drawing_overlay[leg_mask, c] = img_bgra[leg_mask, c]
+        drawing_overlay[leg_mask, 3] = int(255 * 0.15)  # 15% opacity
+        
+        # Disegna contorno gamba (opaco) sul layer BGR
+        cv2.drawContours(drawing_overlay[:, :, :3], contours, -1, self.DRAWING_COLOR, 2)
+        
+        # Alpha pieno sul contorno (completamente visibile)
+        contour_mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.drawContours(contour_mask, contours, -1, 255, 2)
+        drawing_overlay[contour_mask > 0, 3] = 255
 
         # --- HOUGH ---
         gray_blur = cv2.medianBlur(gray, 11)
@@ -99,6 +116,9 @@ class ReferenceProcessor:
 
         valid_sensors = self._remove_duplicates_strict(candidates)
         valid_sensors.sort(key=lambda v: (v[1], v[0]))
+        
+        # Lista flat di tutti i sensori per verifica concentricità
+        sensor_circles = []
 
         steps_config = {}
 
@@ -115,18 +135,34 @@ class ReferenceProcessor:
             group_x_coords = []
             group_y_coords = []
 
-            for s in chunk:
+            for j, s in enumerate(chunk):
                 cx, cy, detected_r = s
+                sensor_id = i + j + 1  # ID univoco progressivo
 
                 # 1. Disegno cerchio con RAGGIO FISSO (ignoriamo detected_r per il disegno)
-                cv2.circle(drawing_mask, (cx, cy), self.FIXED_RADIUS, self.DRAWING_COLOR, 3)
+                cv2.circle(drawing_overlay[:, :, :3], (cx, cy), self.FIXED_RADIUS, self.DRAWING_COLOR, 3)
+                # Alpha pieno sui cerchi
+                circle_mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.circle(circle_mask, (cx, cy), self.FIXED_RADIUS, 255, 3)
+                drawing_overlay[circle_mask > 0, 3] = 255
 
                 # 2. Centro pieno
-                cv2.circle(drawing_mask, (cx, cy), 5, self.DRAWING_COLOR, -1)
+                cv2.circle(drawing_overlay[:, :, :3], (cx, cy), 5, self.DRAWING_COLOR, -1)
+                center_mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.circle(center_mask, (cx, cy), 5, 255, -1)
+                drawing_overlay[center_mask > 0, 3] = 255
 
-                # Salviamo i dati reali per la config (qui manteniamo il raggio rilevato o fisso, a tua scelta)
-                # Se vuoi coerenza totale anche nei dati, usa self.FIXED_RADIUS anche qui.
-                step_list.append({'id': i + 1, 'x': cx, 'y': cy, 'r': self.FIXED_RADIUS})
+                # Salviamo i dati reali per la config
+                step_list.append({'id': sensor_id, 'x': cx, 'y': cy, 'r': self.FIXED_RADIUS})
+                
+                # Aggiungi alla lista flat per concentricità
+                sensor_circles.append({
+                    'id': sensor_id, 
+                    'x': cx, 
+                    'y': cy, 
+                    'r': self.FIXED_RADIUS, 
+                    'group': step_idx
+                })
 
                 group_x_coords.append(cx)
                 group_y_coords.append(cy)
@@ -156,7 +192,7 @@ class ReferenceProcessor:
             text_y = max(text_h + 10, text_y)
 
             cv2.putText(
-                drawing_mask,
+                drawing_overlay[:, :, :3],
                 label_text,
                 (text_x, text_y),
                 self.FONT,
@@ -165,8 +201,13 @@ class ReferenceProcessor:
                 self.FONT_THICKNESS,
                 cv2.LINE_AA
             )
+            
+            # Alpha pieno sul testo
+            text_mask = np.zeros((h, w), dtype=np.uint8)
+            cv2.putText(text_mask, label_text, (text_x, text_y), self.FONT, self.FONT_SCALE, 255, self.FONT_THICKNESS, cv2.LINE_AA)
+            drawing_overlay[text_mask > 0, 3] = 255
 
-        return drawing_mask, steps_config
+        return drawing_overlay, steps_config, sensor_circles
 
     def _remove_duplicates_strict(self, circles):
         if not circles: return []
@@ -200,4 +241,10 @@ class ReferenceProcessor:
 
     def _to_b64(self, img):
         _, buf = cv2.imencode('.png', img)
+        return base64.b64encode(buf).decode()
+    
+    def _to_b64_rgba(self, img_bgra):
+        """Converte immagine BGRA in PNG base64 preservando alpha."""
+        # OpenCV gestisce PNG con alpha, ma assicuriamoci che sia BGRA
+        _, buf = cv2.imencode('.png', img_bgra)
         return base64.b64encode(buf).decode()

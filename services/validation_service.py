@@ -16,23 +16,33 @@ class ValidationService:
         self.processor = ReferenceProcessor()
 
     def handle_reference_upload(self, request):
-        # (Questo metodo rimane invariato)
+        """Gestisce upload reference con overlay semi-trasparente e lista sensori."""
         try:
-            if 'file' not in request.files: return {'success': False, 'error': 'Nessun file'}
+            if 'file' not in request.files: 
+                return {'success': False, 'error': 'Nessun file'}
+            
             result = self.processor.process(request.files['file'])
-            if not result['success']: return result
+            if not result['success']: 
+                return result
+            
             session_id = request.form.get('session_id', 'default')
+            
+            # Salva overlay con alpha e lista sensori per concentricità
             self.sessions[session_id] = {
                 'drawing_mask': result['drawing_mask_b64'],
+                'drawing_overlay': result.get('drawing_overlay_b64', result['drawing_mask_b64']),
+                'sensor_circles': result.get('sensor_circles', []),  # Lista flat di sensori
                 'steps_config': result['steps_config'],
                 'dims': result['dims']
             }
+            
             return {
                 'success': True,
                 'session_id': session_id,
                 'reference_image': result['reference_clean_b64'],
-                'drawing_overlay_image': result['drawing_mask_b64'],
+                'drawing_overlay_image': result.get('drawing_overlay_b64', result['drawing_mask_b64']),
                 'steps_config': result['steps_config'],
+                'sensor_circles': result.get('sensor_circles', []),
                 'total_steps': len(result['steps_config'])
             }
         except Exception as e:
@@ -41,10 +51,9 @@ class ValidationService:
 
     def validate_current_frame(self, request) -> Dict:
         """
-        Sistema migliorato a 3 fasi:
-        1. Estrae contorno preciso dal frame live
-        2. Confronta con il contorno di riferimento usando shape matching
-        3. Solo se combaciano, attiva il lock e verifica i sensori nell'area designata
+        Sistema migliorato a 2 fasi:
+        1. Template Matching: Confronta overlay semi-trasparente con frame live
+        2. HoughCircles: Rileva cerchi fisici e verifica concentricità
         """
         try:
             data = request.get_json()
@@ -53,81 +62,73 @@ class ValidationService:
             current_step_req = str(data.get('current_step', 1))
 
             session = self.sessions.get(session_id)
-            if not session: return {'success': False, 'error': 'Session Expired'}
+            if not session: 
+                return {'success': False, 'error': 'Session Expired'}
 
             curr_img = self._decode_base64_image(curr_b64)
-            ref_mask = self._decode_base64_image_gray(session['drawing_mask'])
-            ref_contour = session.get('reference_contour')
+            ref_overlay = self._decode_base64_image(session['drawing_mask'])  # Usa overlay BGR
             
-            if curr_img is None or ref_mask is None: 
+            if curr_img is None or ref_overlay is None: 
                 return {'success': False, 'error': 'Decode Error'}
 
-            h_ref, w_ref = ref_mask.shape
+            h_ref, w_ref = ref_overlay.shape[:2]
             curr_img_resized = cv2.resize(curr_img, (w_ref, h_ref))
 
-            # --- FASE 1: ESTRAZIONE CONTORNO LIVE PRECISO ---
-            live_contour, live_contour_points = self._extract_live_contour(curr_img_resized)
+            # --- FASE 1: TEMPLATE MATCHING PER ZONA ---
+            is_aligned, zone_match_score = self._check_zone_alignment(curr_img_resized, ref_overlay)
             
-            # --- FASE 2: CONFRONTO CONTORNI (SHAPE MATCHING) ---
-            shape_similarity = 1.0  # Default: non simili
-            alignment_score = 0.0
+            # Converti in percentuale per feedback (score va da -1 a 1, normalizziamo 0.3-0.7 -> 0-100%)
+            alignment_pct = max(0, min(100, (zone_match_score - 0.3) / 0.4 * 100))
             
-            if live_contour is not None and ref_contour is not None:
-                # Usa cv2.matchShapes per confrontare le forme
-                # Valore < 0.1 = molto simili, > 0.3 = molto diversi
-                shape_similarity = cv2.matchShapes(live_contour, ref_contour, cv2.CONTOURS_MATCH_I1, 0)
-                
-                # Calcola anche uno score visivo per feedback utente
-                alignment_score = self._calculate_visual_alignment_score(
-                    live_contour, ref_contour, (h_ref, w_ref)
-                )
+            # Lock si attiva sopra soglia 0.6 (60% correlazione)
+            is_locked = is_aligned
             
-            # LOCK si attiva solo se i contorni combaciano bene
-            # Soglia shape matching: 0.15 (più basso = più preciso)
-            is_locked = (shape_similarity < 0.15) and (alignment_score >= 75.0)
-
-            # --- FASE 3: VERIFICA SENSORI (solo se locked) ---
+            # --- FASE 2: RILEVAMENTO CERCHI E CONCENTRICITÀ (solo se locked) ---
+            sensor_circles_ref = session.get('sensor_circles', [])
             steps_config = session.get('steps_config', {})
             target_sensors = steps_config.get(current_step_req, [])
+            
             sensor_status = []
             present_cnt = 0
-
-            if steps_config:
-                if is_locked and live_contour is not None:
-                    # Verifica sensori SOLO nell'area del contorno validato
-                    for step_key, s_list in steps_config.items():
-                        is_curr_step = (str(step_key) == current_step_req)
-                        for s in s_list:
-                            x, y, r = s['x'], s['y'], s['r']
-                            
-                            # Controlla se il sensore è dentro il contorno
-                            point_in_contour = cv2.pointPolygonTest(live_contour, (x, y), False) >= 0
-                            
-                            is_present = False
-                            if point_in_contour:
-                                # Solo se è dentro il contorno, verifica il colore
-                                x1, y1 = max(0, x - r), max(0, y - r)
-                                x2, y2 = min(w_ref, x + r), min(h_ref, y + r)
-                                roi = curr_img_resized[y1:y2, x1:x2]
-                                is_present = check_sensor_color(roi, threshold=0.015)
-                            
-                            sensor_status.append({
-                                'id': s['id'], 
-                                'step': int(step_key), 
-                                'present': is_present,
-                                'in_area': point_in_contour
-                            })
-                            if is_curr_step and is_present: 
+            missing_cnt = 0
+            group_feedback = ""
+            
+            if is_locked and sensor_circles_ref:
+                # Rileva e verifica sensori
+                sensor_results = self._detect_and_verify_sensors(curr_img_resized, sensor_circles_ref)
+                
+                # Genera status per ogni sensore
+                for step_key, s_list in steps_config.items():
+                    is_curr_step = (str(step_key) == current_step_req)
+                    for s in s_list:
+                        sensor_id = s['id']
+                        result = sensor_results.get(sensor_id, {'present': False, 'group': int(step_key)})
+                        
+                        sensor_status.append({
+                            'id': sensor_id,
+                            'step': int(step_key),
+                            'present': result['present'],
+                            'in_area': True  # Se locked, assume dentro area
+                        })
+                        
+                        if is_curr_step:
+                            if result['present']:
                                 present_cnt += 1
-                else:
-                    for step_key, s_list in steps_config.items():
-                        for s in s_list:
-                            sensor_status.append({
-                                'id': s['id'], 
-                                'step': int(step_key), 
-                                'present': False,
-                                'in_area': False
-                            })
+                            else:
+                                missing_cnt += 1
+                
+                # Genera feedback per gruppo corrente
+                group_feedback = self._generate_group_feedback(sensor_results, steps_config, current_step_req)
+            else:
+                # Non locked: tutti i sensori non presenti
+                for step_key, s_list in steps_config.items():
+                    for s in s_list:
+                        sensor_status.append({
+                            'id': s['id'],
+                            'step': int(step_key),
+                            'present': False,
+                            'in_area': False
+                        })
 
             # --- UI FEEDBACK ---
             total_targets = len(target_sensors)
@@ -137,44 +138,136 @@ class ValidationService:
             direct = "..."
 
             if not is_locked:
-                final_acc = alignment_score
-                if alignment_score < 10:
+                final_acc = alignment_pct
+                if alignment_pct < 20:
                     msg = "Inquadra la gamba"
                     direct = "Posiziona il soggetto al centro"
-                elif alignment_score < 50:
+                elif alignment_pct < 50:
                     msg = "Avvicinati..."
-                    direct = f"Contorno rilevato - allinealo (match: {int((1-shape_similarity)*100)}%)"
-                elif alignment_score < 75:
+                    direct = f"Sovrapposizione: {int(alignment_pct)}%"
+                elif alignment_pct < 80:
                     msg = "Quasi..."
-                    direct = "Centra e sovrapponi il disegno"
+                    direct = "Centra e sovrapponi l'overlay"
+                else:
+                    msg = "Blocco imminente"
+                    direct = f"Match: {int(zone_match_score*100)}%"
             else:
                 if total_targets == 0:
                     final_acc = 100.0
-                    msg = "Contorno Validato"
-                    direct = "Attesa Config Sensori"
+                    msg = "Zona Validata"
+                    direct = "Nessun sensore configurato"
                 elif pct_sensors_found < 100:
                     final_acc = 80.0 + (pct_sensors_found * 0.19)
-                    msg = "Contorno OK"
-                    direct = f"Posiziona sensori: {present_cnt}/{total_targets}"
+                    msg = "Zona OK"
+                    direct = group_feedback if group_feedback else f"Sensori: {present_cnt}/{total_targets}"
                 else:
                     final_acc = 100.0
                     msg = "Perfetto"
-                    direct = "Step Completato!"
+                    direct = "Gruppo completo! ✅"
 
             return {
                 'success': True,
                 'accuracy': round(final_acc, 1),
                 'is_locked': is_locked,
-                'live_contour': live_contour_points,
-                'shape_match': round((1 - shape_similarity) * 100, 1),  # % similarità
+                'zone_match': round(zone_match_score * 100, 1),
                 'message': msg,
                 'direction': direct,
+                'group_feedback': group_feedback,
                 'sensors_status': sensor_status
             }
 
         except Exception as e:
             logger.error(f'Validation Error: {e}')
             return {'success': False, 'error': str(e)}
+    
+    def _check_zone_alignment(self, live_frame, reference_overlay):
+        """
+        Usa template matching per verificare che la gamba sia nella zona giusta.
+        L'overlay include la gamba semi-trasparente come "template".
+        """
+        # Converti a grayscale per matching
+        gray_live = cv2.cvtColor(live_frame, cv2.COLOR_BGR2GRAY)
+        gray_ref = cv2.cvtColor(reference_overlay, cv2.COLOR_BGR2GRAY)
+        
+        # Per template matching, serve che il template sia più piccolo dell'immagine
+        # Usiamo una finestra centrale del reference come template
+        h, w = gray_ref.shape
+        margin_h, margin_w = h // 8, w // 8
+        template = gray_ref[margin_h:h-margin_h, margin_w:w-margin_w]
+        
+        if template.size == 0:
+            return False, 0.0
+        
+        # Template matching con metodo normalizado
+        result = cv2.matchTemplate(gray_live, template, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(result)
+        
+        # Soglia: 0.6 = 60% match
+        is_aligned = max_val >= 0.55
+        return is_aligned, max_val
+    
+    def _detect_and_verify_sensors(self, live_frame, sensor_circles_ref: List[Dict]) -> Dict:
+        """
+        1. Rileva cerchi nel frame live con HoughCircles
+        2. Per ogni cerchio di riferimento, verifica se c'è un cerchio live concentrico
+        3. Concentrico = distanza tra centri < soglia (es. 25px)
+        """
+        gray = cv2.cvtColor(live_frame, cv2.COLOR_BGR2GRAY)
+        gray_blur = cv2.medianBlur(gray, 5)
+        
+        # Parametri HoughCircles ottimizzati per sensori
+        circles_live = cv2.HoughCircles(
+            gray_blur, cv2.HOUGH_GRADIENT, 
+            dp=1.2,
+            minDist=40, 
+            param1=50, 
+            param2=30,
+            minRadius=15, 
+            maxRadius=50
+        )
+        
+        results = {}
+        
+        for ref in sensor_circles_ref:
+            ref_id = ref['id']
+            ref_x, ref_y = ref['x'], ref['y']
+            found = False
+            
+            if circles_live is not None:
+                for circle in circles_live[0]:
+                    x, y, r = circle
+                    dist = np.sqrt((x - ref_x)**2 + (y - ref_y)**2)
+                    if dist < 25:  # Soglia concentricità: 25px
+                        found = True
+                        break
+            
+            results[ref_id] = {
+                'present': found,
+                'group': ref.get('group', 1)
+            }
+        
+        return results
+    
+    def _generate_group_feedback(self, sensor_results: Dict, steps_config: Dict, current_step: str) -> str:
+        """
+        Per ogni gruppo (step), conta quanti sensori mancano e genera feedback specifico.
+        """
+        step_sensors = steps_config.get(current_step, [])
+        
+        if not step_sensors:
+            return ""
+        
+        missing = sum(1 for s in step_sensors if not sensor_results.get(s['id'], {}).get('present', False))
+        total = len(step_sensors)
+        
+        if missing == 0:
+            return "Gruppo completo! ✅"
+        elif missing == 1:
+            return "Manca 1 sensore nel gruppo"
+        elif missing == total:
+            return f"Posizionare tutti e {total} i sensori"
+        else:
+            return f"Mancano {missing} sensori, posizionarli"
 
     def _extract_reference_contour(self, ref_mask):
         """
