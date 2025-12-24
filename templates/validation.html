@@ -3,415 +3,453 @@
 {% block title %}Validazione Live{% endblock %}
 
 {% block content %}
-    <div class="fixed inset-0 z-[9999] bg-black lg:static lg:z-auto lg:bg-transparent lg:grid lg:grid-cols-12 lg:gap-8 lg:min-h-auto">
+<div
+    class="fixed inset-0 z-[9999] bg-black lg:static lg:z-auto lg:bg-transparent lg:grid lg:grid-cols-12 lg:gap-8 lg:min-h-auto">
 
-        <div class="relative w-full h-full lg:col-span-8 lg:h-auto lg:rounded-2xl lg:overflow-hidden lg:border lg:border-[#2e3054] lg:shadow-2xl">
+    <div
+        class="relative w-full h-full lg:col-span-8 lg:h-auto lg:rounded-2xl lg:overflow-hidden lg:border lg:border-[#2e3054] lg:shadow-2xl">
 
-            <div class="absolute top-4 left-4 z-20 flex gap-2 lg:hidden">
-                <span class="px-3 py-1 rounded-full text-xs font-bold bg-black/60 text-white border border-white/20 backdrop-blur-md">
-                    Step <span id="currentStepDisp">1</span>/<span id="totalStepsDisp">?</span>
-                </span>
-                <span id="camStatus"
-                      class="px-3 py-1 rounded-full text-xs font-bold bg-red-900/80 text-red-200 border border-red-500/30 backdrop-blur-md">
-                    Init...
-                </span>
-            </div>
-
-            <div class="video-container relative w-full h-full lg:aspect-video bg-black flex items-center justify-center">
-                <video id="videoElement" autoplay playsinline muted
-                       class="w-full h-full object-cover lg:object-contain"></video>
-                <canvas id="overlayCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
-            </div>
-
-            <div id="finalSuccessOverlay"
-                 class="hidden absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-8 text-center">
-                <i class="bi bi-trophy-fill text-6xl text-yellow-400 mb-6 animate-bounce"></i>
-                <h3 class="text-3xl font-bold text-white mb-2">Ottimo Lavoro!</h3>
-                <p class="text-slate-400 mb-8">Hai completato tutti gli step.</p>
-                <button onclick="location.reload()"
-                        class="px-8 py-4 bg-indigo-600 rounded-xl text-white font-bold w-full max-w-xs shadow-lg shadow-indigo-500/30">
-                    Nuova Sessione
-                </button>
-            </div>
-
-            <div class="absolute bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-black via-black/95 to-transparent pt-12 pb-8 px-6 flex flex-col gap-6 items-center lg:hidden">
-
-                <div id="accuracyPanelMobile"
-                     class="hidden flex flex-col items-center gap-2 w-full animate-in slide-in-from-bottom-10 fade-in duration-300">
-                    <div class="relative w-20 h-20">
-                        <svg class="w-full h-full transform -rotate-90 drop-shadow-lg">
-                            <circle cx="50%" cy="50%" r="45%" stroke="#334155" stroke-width="6" fill="transparent"/>
-                            <circle id="lockProgressRingMob" cx="50%" cy="50%" r="45%" stroke="#ef4444" stroke-width="6"
-                                    fill="transparent" stroke-dasharray="283" stroke-dashoffset="283"
-                                    stroke-linecap="round" class="transition-all duration-300"/>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <span class="text-xl font-bold text-white" id="accuracyValueMob">0%</span>
-                        </div>
-                    </div>
-                    <div class="text-center">
-                        <h3 class="text-2xl font-bold text-white leading-none mb-1" id="accuracyMessageMob">...</h3>
-                        <p class="text-sm text-indigo-300 uppercase tracking-widest font-semibold"
-                           id="groupActionTextMob">In Attesa</p>
-                    </div>
-                </div>
-
-                <div class="w-full flex gap-3">
-                    <button id="startBtnMob"
-                            class="flex-1 py-4 bg-green-600 hover:bg-green-500 active:scale-95 text-white rounded-2xl font-bold text-lg shadow-lg shadow-green-900/40 transition-all flex justify-center items-center gap-2">
-                        <i class="bi bi-play-fill text-2xl"></i> AVVIA
-                    </button>
-                    <button id="stopBtnMob"
-                            class="hidden flex-1 py-4 bg-red-600 hover:bg-red-500 active:scale-95 text-white rounded-2xl font-bold text-lg shadow-lg shadow-red-900/40 transition-all flex justify-center items-center gap-2">
-                        <i class="bi bi-stop-fill text-2xl"></i> STOP
-                    </button>
-                    <button id="skipBtnMob"
-                            class="hidden px-4 py-4 bg-white/10 hover:bg-white/20 text-slate-300 rounded-2xl font-medium backdrop-blur-md">
-                        <i class="bi bi-skip-forward-fill text-xl"></i>
-                    </button>
-                </div>
-            </div>
-
-            <div class="hidden lg:flex justify-between items-center bg-[#161831] p-4 mt-4 border border-[#2e3054] rounded-xl">
-                <div class="flex gap-4 items-center">
-                    <div class="text-white font-bold text-xl" id="accuracyValueDesk">0%</div>
-                    <div class="text-slate-400 text-sm" id="accuracyMessageDesk">In attesa...</div>
-                </div>
-                <div class="flex gap-3">
-                    <button id="startBtnDesk"
-                            class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold">AVVIA
-                    </button>
-                    <button id="stopBtnDesk"
-                            class="hidden px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold">STOP
-                    </button>
-                    <button id="skipBtnDesk" class="text-slate-400 underline text-sm px-4">Salta</button>
-                </div>
-            </div>
-
+        <div class="absolute top-4 left-4 z-20 flex gap-2 lg:hidden">
+            <span
+                class="px-3 py-1 rounded-full text-xs font-bold bg-black/60 text-white border border-white/20 backdrop-blur-md">
+                Step <span id="currentStepDisp">1</span>/<span id="totalStepsDisp">?</span>
+            </span>
+            <span id="camStatus"
+                class="px-3 py-1 rounded-full text-xs font-bold bg-red-900/80 text-red-200 border border-red-500/30 backdrop-blur-md">
+                Init...
+            </span>
         </div>
 
-        <div class="hidden lg:block lg:col-span-4 space-y-6">
-            <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
-                <h4 class="text-white font-semibold mb-4">Riferimento</h4>
-                <div id="referencePreview" class="opacity-70"></div>
-            </div>
-            <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
-                <h5 class="text-white font-semibold mb-2">Progresso</h5>
-                <div class="w-full bg-slate-800 rounded-full h-2">
-                    <div id="progressBar" class="bg-indigo-600 h-2 rounded-full" style="width: 0%"></div>
+        <div class="video-container relative w-full h-full lg:aspect-video bg-black flex items-center justify-center">
+            <video id="videoElement" autoplay playsinline muted
+                class="w-full h-full object-cover lg:object-contain"></video>
+            <canvas id="overlayCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
+        </div>
+
+        <div id="finalSuccessOverlay"
+            class="hidden absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-8 text-center">
+            <i class="bi bi-trophy-fill text-6xl text-yellow-400 mb-6 animate-bounce"></i>
+            <h3 class="text-3xl font-bold text-white mb-2">Ottimo Lavoro!</h3>
+            <p class="text-slate-400 mb-8">Hai completato tutti gli step.</p>
+            <button onclick="location.reload()"
+                class="px-8 py-4 bg-indigo-600 rounded-xl text-white font-bold w-full max-w-xs shadow-lg shadow-indigo-500/30">
+                Nuova Sessione
+            </button>
+        </div>
+
+        <div
+            class="absolute bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-black via-black/95 to-transparent pt-12 pb-8 px-6 flex flex-col gap-6 items-center lg:hidden">
+
+            <div id="accuracyPanelMobile"
+                class="hidden flex flex-col items-center gap-2 w-full animate-in slide-in-from-bottom-10 fade-in duration-300">
+                <div class="relative w-20 h-20">
+                    <svg class="w-full h-full transform -rotate-90 drop-shadow-lg">
+                        <circle cx="50%" cy="50%" r="45%" stroke="#334155" stroke-width="6" fill="transparent" />
+                        <circle id="lockProgressRingMob" cx="50%" cy="50%" r="45%" stroke="#ef4444" stroke-width="6"
+                            fill="transparent" stroke-dasharray="283" stroke-dashoffset="283" stroke-linecap="round"
+                            class="transition-all duration-300" />
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-xl font-bold text-white" id="accuracyValueMob">0%</span>
+                    </div>
                 </div>
+                <div class="text-center">
+                    <h3 class="text-2xl font-bold text-white leading-none mb-1" id="accuracyMessageMob">...</h3>
+                    <p class="text-sm text-indigo-300 uppercase tracking-widest font-semibold" id="groupActionTextMob">
+                        In Attesa</p>
+                </div>
+            </div>
+
+            <div class="w-full flex gap-3">
+                <button id="startBtnMob"
+                    class="flex-1 py-4 bg-green-600 hover:bg-green-500 active:scale-95 text-white rounded-2xl font-bold text-lg shadow-lg shadow-green-900/40 transition-all flex justify-center items-center gap-2">
+                    <i class="bi bi-play-fill text-2xl"></i> AVVIA
+                </button>
+                <button id="stopBtnMob"
+                    class="hidden flex-1 py-4 bg-red-600 hover:bg-red-500 active:scale-95 text-white rounded-2xl font-bold text-lg shadow-lg shadow-red-900/40 transition-all flex justify-center items-center gap-2">
+                    <i class="bi bi-stop-fill text-2xl"></i> STOP
+                </button>
+                <button id="skipBtnMob"
+                    class="hidden px-4 py-4 bg-white/10 hover:bg-white/20 text-slate-300 rounded-2xl font-medium backdrop-blur-md">
+                    <i class="bi bi-skip-forward-fill text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <div
+            class="hidden lg:flex justify-between items-center bg-[#161831] p-4 mt-4 border border-[#2e3054] rounded-xl">
+            <div class="flex gap-4 items-center">
+                <div class="text-white font-bold text-xl" id="accuracyValueDesk">0%</div>
+                <div class="text-slate-400 text-sm" id="accuracyMessageDesk">In attesa...</div>
+            </div>
+            <div class="flex gap-3">
+                <button id="startBtnDesk"
+                    class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold">AVVIA
+                </button>
+                <button id="stopBtnDesk"
+                    class="hidden px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold">STOP
+                </button>
+                <button id="skipBtnDesk" class="text-slate-400 underline text-sm px-4">Salta</button>
             </div>
         </div>
 
     </div>
+
+    <div class="hidden lg:block lg:col-span-4 space-y-6">
+        <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
+            <h4 class="text-white font-semibold mb-4">Riferimento</h4>
+            <div id="referencePreview" class="opacity-70"></div>
+        </div>
+        <div class="bg-[#161831] border border-[#2e3054] rounded-2xl p-6">
+            <h5 class="text-white font-semibold mb-2">Progresso</h5>
+            <div class="w-full bg-slate-800 rounded-full h-2">
+                <div id="progressBar" class="bg-indigo-600 h-2 rounded-full" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
 {% endblock %}
 
 {% block scripts %}
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <script>
-        // --- UI REFS ---
-        const UI = {
-            mob: {
-                start: document.getElementById('startBtnMob'),
-                stop: document.getElementById('stopBtnMob'),
-                skip: document.getElementById('skipBtnMob'),
-                accPanel: document.getElementById('accuracyPanelMobile'),
-                accVal: document.getElementById('accuracyValueMob'),
-                accMsg: document.getElementById('accuracyMessageMob'),
-                dirMsg: document.getElementById('groupActionTextMob'),
-                ring: document.getElementById('lockProgressRingMob')
-            },
-            desk: {
-                start: document.getElementById('startBtnDesk'),
-                stop: document.getElementById('stopBtnDesk'),
-                skip: document.getElementById('skipBtnDesk'),
-                accVal: document.getElementById('accuracyValueDesk'),
-                accMsg: document.getElementById('accuracyMessageDesk')
-            }
-        };
-
-        // --- STATO ---
-        let isCameraActive = false;
-        let isValidating = false;
-        let currentStep = 1;
-        let totalSteps = 1;
-        let stepsConfig = {};
-        let validationIntervalId = null;
-        let targetAccuracy = 0;
-        let displayedAccuracy = 0;
-        let sensorsRealtimeStatus = {};
-
-        // STATI NUOVI LOGICA A FASI
-        let isLocked = false;
-        let liveContourPoints = [];
-
-        // Immagini
-        let cleanReferenceImage = null;
-        let validationOverlayImage = null;
-
-        // Elementi Video/Canvas
-        const video = document.getElementById('videoElement');
-        const canvas = document.getElementById('overlayCanvas');
-        const ctx = canvas.getContext('2d');
-        const CIRCUMFERENCE = 283;
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSession();
-
-            UI.mob.start.onclick = startValidation;
-            UI.mob.stop.onclick = stopValidation;
-            UI.mob.skip.onclick = nextStep;
-
-            UI.desk.start.onclick = startValidation;
-            UI.desk.stop.onclick = stopValidation;
-            UI.desk.skip.onclick = nextStep;
-
-            requestAnimationFrame(animateValues);
-        });
-
-        function loadSession() {
-            const refSrc = localStorage.getItem('cleanReferenceImage');
-            const ovlSrc = localStorage.getItem('validationOverlayImage');
-            const meta = localStorage.getItem('referenceMetadata');
-
-            if (refSrc && ovlSrc && meta) {
-                validationOverlayImage = new Image();
-                validationOverlayImage.src = ovlSrc;
-
-                // Preview Desktop
-                const img = new Image();
-                img.src = ovlSrc;
-                img.className = "w-full rounded-lg";
-                document.getElementById('referencePreview').appendChild(img);
-
-                let metadata = JSON.parse(meta);
-                stepsConfig = metadata.steps_config || {};
-                totalSteps = Object.keys(stepsConfig).length || 1;
-                document.getElementById('totalStepsDisp').innerText = totalSteps;
-
-                validationOverlayImage.onload = () => initCamera();
-            }
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script>
+    // --- UI REFS ---
+    const UI = {
+        mob: {
+            start: document.getElementById('startBtnMob'),
+            stop: document.getElementById('stopBtnMob'),
+            skip: document.getElementById('skipBtnMob'),
+            accPanel: document.getElementById('accuracyPanelMobile'),
+            accVal: document.getElementById('accuracyValueMob'),
+            accMsg: document.getElementById('accuracyMessageMob'),
+            dirMsg: document.getElementById('groupActionTextMob'),
+            ring: document.getElementById('lockProgressRingMob')
+        },
+        desk: {
+            start: document.getElementById('startBtnDesk'),
+            stop: document.getElementById('stopBtnDesk'),
+            skip: document.getElementById('skipBtnDesk'),
+            accVal: document.getElementById('accuracyValueDesk'),
+            accMsg: document.getElementById('accuracyMessageDesk')
         }
+    };
 
-        async function initCamera() {
-            if (isCameraActive || !window.sensorApp) return;
-            await window.sensorApp.initializeCameraWithAdaptiveResolution(null, validationOverlayImage);
-            isCameraActive = true;
-            document.getElementById('camStatus').innerText = "Camera ON";
-            requestAnimationFrame(drawLoop);
+    // --- STATO ---
+    let isCameraActive = false;
+    let isValidating = false;
+    let currentStep = 1;
+    let totalSteps = 1;
+    let stepsConfig = {};
+    let validationIntervalId = null;
+    let targetAccuracy = 0;
+    let displayedAccuracy = 0;
+    let sensorsRealtimeStatus = {};
+
+    // STATI NUOVI LOGICA A FASI
+    let isLocked = false;
+    let liveContourPoints = [];
+    let shapeMatchScore = 0; // Nuova metrica per similarità forma
+
+    // Immagini
+    let cleanReferenceImage = null;
+    let validationOverlayImage = null;
+
+    // Elementi Video/Canvas
+    const video = document.getElementById('videoElement');
+    const canvas = document.getElementById('overlayCanvas');
+    const ctx = canvas.getContext('2d');
+    const CIRCUMFERENCE = 283;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSession();
+
+        UI.mob.start.onclick = startValidation;
+        UI.mob.stop.onclick = stopValidation;
+        UI.mob.skip.onclick = nextStep;
+
+        UI.desk.start.onclick = startValidation;
+        UI.desk.stop.onclick = stopValidation;
+        UI.desk.skip.onclick = nextStep;
+
+        requestAnimationFrame(animateValues);
+    });
+
+    function loadSession() {
+        const refSrc = localStorage.getItem('cleanReferenceImage');
+        const ovlSrc = localStorage.getItem('validationOverlayImage');
+        const meta = localStorage.getItem('referenceMetadata');
+
+        if (refSrc && ovlSrc && meta) {
+            validationOverlayImage = new Image();
+            validationOverlayImage.src = ovlSrc;
+
+            // Preview Desktop
+            const img = new Image();
+            img.src = ovlSrc;
+            img.className = "w-full rounded-lg";
+            document.getElementById('referencePreview').appendChild(img);
+
+            let metadata = JSON.parse(meta);
+            stepsConfig = metadata.steps_config || {};
+            totalSteps = Object.keys(stepsConfig).length || 1;
+            document.getElementById('totalStepsDisp').innerText = totalSteps;
+
+            validationOverlayImage.onload = () => initCamera();
         }
+    }
 
-        function startValidation() {
-            if (!isCameraActive) return;
-            isValidating = true;
-            isLocked = false;
-            currentStep = 1;
+    async function initCamera() {
+        if (isCameraActive || !window.sensorApp) return;
+        await window.sensorApp.initializeCameraWithAdaptiveResolution(null, validationOverlayImage);
+        isCameraActive = true;
+        document.getElementById('camStatus').innerText = "Camera ON";
+        requestAnimationFrame(drawLoop);
+    }
 
-            UI.mob.start.classList.add('hidden');
-            UI.mob.stop.classList.remove('hidden');
-            UI.mob.skip.classList.remove('hidden');
-            UI.mob.accPanel.classList.remove('hidden');
+    function startValidation() {
+        if (!isCameraActive) return;
+        isValidating = true;
+        isLocked = false;
+        currentStep = 1;
 
-            UI.desk.start.classList.add('hidden');
-            UI.desk.stop.classList.remove('hidden');
+        UI.mob.start.classList.add('hidden');
+        UI.mob.stop.classList.remove('hidden');
+        UI.mob.skip.classList.remove('hidden');
+        UI.mob.accPanel.classList.remove('hidden');
 
-            updateStepDisplay();
-            validationIntervalId = setInterval(validateBackend, 500);
-        }
+        UI.desk.start.classList.add('hidden');
+        UI.desk.stop.classList.remove('hidden');
 
-        function stopValidation() {
-            isValidating = false;
-            clearInterval(validationIntervalId);
-            document.getElementById('finalSuccessOverlay').classList.remove('hidden');
-            UI.mob.accPanel.classList.add('hidden');
-            UI.mob.stop.classList.add('hidden');
-        }
+        updateStepDisplay();
+        validationIntervalId = setInterval(validateBackend, 500);
+    }
 
-        function nextStep() {
-            currentStep++;
-            if (currentStep > totalSteps) stopValidation();
-            else updateStepDisplay();
-        }
+    function stopValidation() {
+        isValidating = false;
+        clearInterval(validationIntervalId);
+        document.getElementById('finalSuccessOverlay').classList.remove('hidden');
+        UI.mob.accPanel.classList.add('hidden');
+        UI.mob.stop.classList.add('hidden');
+    }
 
-        function updateStepDisplay() {
-            document.getElementById('currentStepDisp').innerText = currentStep;
-            const pct = ((currentStep - 1) / totalSteps) * 100;
-            document.getElementById('progressBar').style.width = pct + "%";
-            // Reset lock per il nuovo step se necessario, oppure mantieni lock se la posizione è la stessa
-            // isLocked = false; // Decommenta se ogni step richiede riallineamento
-        }
+    function nextStep() {
+        currentStep++;
+        if (currentStep > totalSteps) stopValidation();
+        else updateStepDisplay();
+    }
 
-        async function validateBackend() {
-            if (!isValidating) return;
+    function updateStepDisplay() {
+        document.getElementById('currentStepDisp').innerText = currentStep;
+        const pct = ((currentStep - 1) / totalSteps) * 100;
+        document.getElementById('progressBar').style.width = pct + "%";
+        // Reset lock per il nuovo step se necessario, oppure mantieni lock se la posizione è la stessa
+        // isLocked = false; // Decommenta se ogni step richiede riallineamento
+    }
 
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = video.videoWidth;
-            tempCanvas.height = video.videoHeight;
-            tempCanvas.getContext('2d').drawImage(video, 0, 0);
-            const frame = tempCanvas.toDataURL('image/jpeg', 0.5);
+    async function validateBackend() {
+        if (!isValidating) return;
 
-            const meta = JSON.parse(localStorage.getItem('referenceMetadata'));
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+        tempCanvas.getContext('2d').drawImage(video, 0, 0);
+        const frame = tempCanvas.toDataURL('image/jpeg', 0.5);
 
-            try {
-                const res = await fetch('/api/validate_frame', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        session_id: meta.session_id,
-                        current_frame: frame,
-                        current_step: currentStep
-                    })
-                });
-                const data = await res.json();
+        const meta = JSON.parse(localStorage.getItem('referenceMetadata'));
 
-                if (data.success) {
-                    targetAccuracy = data.accuracy;
-                    isLocked = data.is_locked;
-                    liveContourPoints = data.live_contour || [];
+        try {
+            const res = await fetch('/api/validate_frame', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: meta.session_id,
+                    current_frame: frame,
+                    current_step: currentStep
+                })
+            });
+            const data = await res.json();
 
-                    UI.mob.accMsg.innerText = data.message;
-                    UI.mob.dirMsg.innerText = data.direction;
-                    UI.desk.accMsg.innerText = data.message;
-                    UI.desk.accVal.innerText = Math.round(data.accuracy) + "%";
+            if (data.success) {
+                targetAccuracy = data.accuracy;
+                isLocked = data.is_locked;
+                liveContourPoints = data.live_contour || [];
+                shapeMatchScore = data.shape_match || 0;
 
-                    if (data.sensors_status) {
-                        data.sensors_status.forEach(s => sensorsRealtimeStatus[s.id] = s.present);
-                    }
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        }
+                UI.mob.accMsg.innerText = data.message;
+                UI.mob.dirMsg.innerText = data.direction;
+                UI.desk.accMsg.innerText = data.message;
+                UI.desk.accVal.innerText = Math.round(data.accuracy) + "%";
 
-        function animateValues() {
-            if (Math.abs(targetAccuracy - displayedAccuracy) > 0.5) {
-                displayedAccuracy += (targetAccuracy - displayedAccuracy) * 0.1;
-            } else {
-                displayedAccuracy = targetAccuracy;
-            }
-
-            UI.mob.accVal.innerText = Math.round(displayedAccuracy) + '%';
-
-            const offset = CIRCUMFERENCE - ((displayedAccuracy / 100) * CIRCUMFERENCE);
-            if (UI.mob.ring) UI.mob.ring.style.strokeDashoffset = offset;
-
-            // Colore anello: Rosso (No Lock) -> Giallo (Lock ma sensori parziali) -> Verde (Finito)
-            let color = '#ef4444'; // Rosso
-            if (isLocked) color = '#facc15'; // Giallo
-            if (displayedAccuracy > 98) color = '#4ade80'; // Verde
-
-            if (UI.mob.ring) UI.mob.ring.style.stroke = color;
-            requestAnimationFrame(animateValues);
-        }
-
-        // --- DRAW LOOP PRINCIPALE ---
-        function drawLoop() {
-            if (!isCameraActive) return;
-
-            if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
-                canvas.width = video.clientWidth;
-                canvas.height = video.clientHeight;
-            }
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const dims = getDrawDimensions(canvas.width, canvas.height, validationOverlayImage);
-            const scale = dims.w / validationOverlayImage.naturalWidth;
-
-            // --- FASE 1: DISEGNO NON ALLINEATO ---
-            if (!isLocked) {
-                // Overlay Disegno: Bianco semitrasparente
-                ctx.save();
-                ctx.globalAlpha = 0.5;
-                if (validationOverlayImage) ctx.drawImage(validationOverlayImage, dims.x, dims.y, dims.w, dims.h);
-                ctx.restore();
-
-                // Live Contour: Linea Rossa che trema seguendo la gamba
-                if (liveContourPoints.length > 0) {
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.lineWidth = 3;
-                    ctx.strokeStyle = '#ef4444'; // ROSSO
-                    ctx.lineJoin = 'round';
-
-                    liveContourPoints.forEach((pt, index) => {
-                        // Scala coordinate dal backend al canvas
-                        const cx = dims.x + (pt[0] * scale);
-                        const cy = dims.y + (pt[1] * scale);
-                        if (index === 0) ctx.moveTo(cx, cy);
-                        else ctx.lineTo(cx, cy);
-                    });
-
-                    ctx.closePath();
-                    ctx.stroke();
-
-                    // Label
-                    ctx.fillStyle = "#ef4444";
-                    ctx.font = "bold 14px sans-serif";
-                    ctx.fillText("ALLINEA I BORDI", dims.x + 10, dims.y + 25);
-                    ctx.restore();
+                if (data.sensors_status) {
+                    data.sensors_status.forEach(s => sensorsRealtimeStatus[s.id] = s.present);
                 }
             }
+        } catch (e) {
+            console.error(e);
+        }
+    }
 
-            // --- FASE 2: DISEGNO LOCKED (ALLINEATO) ---
-            else {
-                // Cornice Verde fissa per confermare il lock
+    function animateValues() {
+        if (Math.abs(targetAccuracy - displayedAccuracy) > 0.5) {
+            displayedAccuracy += (targetAccuracy - displayedAccuracy) * 0.1;
+        } else {
+            displayedAccuracy = targetAccuracy;
+        }
+
+        UI.mob.accVal.innerText = Math.round(displayedAccuracy) + '%';
+
+        const offset = CIRCUMFERENCE - ((displayedAccuracy / 100) * CIRCUMFERENCE);
+        if (UI.mob.ring) UI.mob.ring.style.strokeDashoffset = offset;
+
+        // Colore anello: Rosso (No Lock) -> Giallo (Lock ma sensori parziali) -> Verde (Finito)
+        let color = '#ef4444'; // Rosso
+        if (isLocked) color = '#facc15'; // Giallo
+        if (displayedAccuracy > 98) color = '#4ade80'; // Verde
+
+        if (UI.mob.ring) UI.mob.ring.style.stroke = color;
+        requestAnimationFrame(animateValues);
+    }
+
+    // --- DRAW LOOP PRINCIPALE ---
+    function drawLoop() {
+        if (!isCameraActive) return;
+
+        if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
+            canvas.width = video.clientWidth;
+            canvas.height = video.clientHeight;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const dims = getDrawDimensions(canvas.width, canvas.height, validationOverlayImage);
+        const scale = dims.w / validationOverlayImage.naturalWidth;
+
+        // --- FASE 1: DISEGNO NON ALLINEATO (Mostra overlay + contorni) ---
+        if (!isLocked) {
+            // Overlay Disegno di riferimento: Semi-trasparente bianco
+            ctx.save();
+            ctx.globalAlpha = 0.35;
+            if (validationOverlayImage) ctx.drawImage(validationOverlayImage, dims.x, dims.y, dims.w, dims.h);
+            ctx.restore();
+
+            // Contorno di riferimento: Linea tratteggiata verde per guida
+            ctx.save();
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 5]);
+            ctx.strokeRect(dims.x, dims.y, dims.w, dims.h);
+            ctx.restore();
+
+            // Live Contour: Linea ROSSA che segue la gamba real-time
+            if (liveContourPoints.length > 0) {
                 ctx.save();
-                ctx.strokeStyle = '#22c55e'; // Verde
+                ctx.beginPath();
                 ctx.lineWidth = 4;
-                // Disegna rettangolo o immagine outline verde
-                ctx.strokeRect(dims.x, dims.y, dims.w, dims.h);
+                ctx.strokeStyle = '#ef4444'; // ROSSO
+                ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
+                ctx.shadowBlur = 10;
+                ctx.lineJoin = 'round';
 
-                ctx.fillStyle = "#22c55e";
-                ctx.font = "bold 14px sans-serif";
-                ctx.fillText("LOCK ATTIVO - SCANSIONE...", dims.x + 10, dims.y + 25);
+                liveContourPoints.forEach((pt, index) => {
+                    const cx = dims.x + (pt[0] * scale);
+                    const cy = dims.y + (pt[1] * scale);
+                    if (index === 0) ctx.moveTo(cx, cy);
+                    else ctx.lineTo(cx, cy);
+                });
+
+                ctx.closePath();
+                ctx.stroke();
                 ctx.restore();
 
-                // Disegna Sensori
-                if (isValidating && stepsConfig) {
-                    Object.keys(stepsConfig).forEach(stepKey => {
-                        const stepNum = parseInt(stepKey);
-                        if (stepNum !== currentStep) return;
+                // Label con istruzioni
+                ctx.save();
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.fillRect(dims.x + 5, dims.y + 5, 280, 40);
+                ctx.fillStyle = "#ef4444";
+                ctx.font = "bold 16px sans-serif";
+                ctx.fillText("🔴 ALLINEA IL CONTORNO ROSSO", dims.x + 15, dims.y + 28);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "12px sans-serif";
+                ctx.fillText("Sovrapponi al disegno verde", dims.x + 15, dims.y + 45);
+                ctx.restore();
+            }
+        }
 
-                        const sensors = stepsConfig[stepKey];
-                        sensors.forEach(s => {
-                            const cx = dims.x + (s.x * scale);
-                            const cy = dims.y + (s.y * scale);
-                            const r = s.r * scale;
-                            const isPresent = sensorsRealtimeStatus[s.id];
+        // --- FASE 2: DISEGNO LOCKED (ALLINEATO) - Mostra solo sensori ---
+        else {
+            // Cornice Verde SOLIDA per confermare il lock
+            ctx.save();
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 6;
+            ctx.shadowColor = 'rgba(34, 197, 94, 0.6)';
+            ctx.shadowBlur = 15;
+            ctx.strokeRect(dims.x, dims.y, dims.w, dims.h);
+            ctx.restore();
 
-                            const pulse = isPresent ? 0 : (Math.sin(Date.now() / 150) * 3);
+            // Badge di conferma lock
+            ctx.save();
+            ctx.fillStyle = "rgba(34, 197, 94, 0.9)";
+            ctx.fillRect(dims.x + 5, dims.y + 5, 250, 35);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 14px sans-serif";
+            ctx.fillText("✅ CONTORNO VALIDATO - SCANSIONE...", dims.x + 15, dims.y + 27);
+            ctx.restore();
 
-                            ctx.lineWidth = isPresent ? 3 : 2;
-                            ctx.strokeStyle = isPresent ? '#00FF00' : '#FFD700';
-                            ctx.fillStyle = isPresent ? 'rgba(0, 255, 0, 0.4)' : 'transparent';
+            // Disegna Sensori con cerchi pulsanti
+            if (isValidating && stepsConfig) {
+                Object.keys(stepsConfig).forEach(stepKey => {
+                    const stepNum = parseInt(stepKey);
+                    if (stepNum !== currentStep) return;
 
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, r + pulse, 0, Math.PI * 2);
-                            ctx.fill();
-                            ctx.stroke();
-                        });
+                    const sensors = stepsConfig[stepKey];
+                    sensors.forEach(s => {
+                        const cx = dims.x + (s.x * scale);
+                        const cy = dims.y + (s.y * scale);
+                        const r = s.r * scale;
+                        const isPresent = sensorsRealtimeStatus[s.id];
+
+                        // Animazione pulsante per sensori mancanti
+                        const pulse = isPresent ? 0 : (Math.sin(Date.now() / 150) * 3);
+
+                        ctx.save();
+                        ctx.lineWidth = isPresent ? 4 : 2;
+                        ctx.strokeStyle = isPresent ? '#00FF00' : '#FFD700';
+                        ctx.fillStyle = isPresent ? 'rgba(0, 255, 0, 0.4)' : 'rgba(255, 215, 0, 0.2)';
+
+                        // Ombra per sensori trovati
+                        if (isPresent) {
+                            ctx.shadowColor = 'rgba(0, 255, 0, 0.8)';
+                            ctx.shadowBlur = 15;
+                        }
+
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r + pulse, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.restore();
                     });
-                }
+                });
             }
-            requestAnimationFrame(drawLoop);
         }
+        requestAnimationFrame(drawLoop);
+    }
 
-        function getDrawDimensions(cw, ch, img) {
-            if (!img) return {x: 0, y: 0, w: 0, h: 0};
-            // Logica "contain" per assicurare che tutto il disegno sia visibile
-            const imgRatio = img.naturalWidth / img.naturalHeight;
-            const canvasRatio = cw / ch;
-            let w, h;
+    function getDrawDimensions(cw, ch, img) {
+        if (!img) return { x: 0, y: 0, w: 0, h: 0 };
+        // Logica "contain" per assicurare che tutto il disegno sia visibile
+        const imgRatio = img.naturalWidth / img.naturalHeight;
+        const canvasRatio = cw / ch;
+        let w, h;
 
-            if (canvasRatio > imgRatio) {
-                h = ch;
-                w = ch * imgRatio;
-            } else {
-                w = cw;
-                h = cw / imgRatio;
-            }
-            return {x: (cw - w) / 2, y: (ch - h) / 2, w: w, h: h};
+        if (canvasRatio > imgRatio) {
+            h = ch;
+            w = ch * imgRatio;
+        } else {
+            w = cw;
+            h = cw / imgRatio;
         }
-    </script>
+        return { x: (cw - w) / 2, y: (ch - h) / 2, w: w, h: h };
+    }
+</script>
 {% endblock %}
