@@ -40,7 +40,12 @@ class ValidationService:
             return {'success': False, 'error': str(e)}
 
     def validate_current_frame(self, request) -> Dict:
-        # (Questo metodo rimane invariato rispetto alla versione con soglia 80%)
+        """
+        Sistema migliorato a 3 fasi:
+        1. Estrae contorno preciso dal frame live
+        2. Confronta con il contorno di riferimento usando shape matching
+        3. Solo se combaciano, attiva il lock e verifica i sensori nell'area designata
+        """
         try:
             data = request.get_json()
             curr_b64 = data.get('current_frame')
@@ -52,39 +57,77 @@ class ValidationService:
 
             curr_img = self._decode_base64_image(curr_b64)
             ref_mask = self._decode_base64_image_gray(session['drawing_mask'])
-            if curr_img is None or ref_mask is None: return {'success': False, 'error': 'Decode Error'}
+            ref_contour = session.get('reference_contour')
+            
+            if curr_img is None or ref_mask is None: 
+                return {'success': False, 'error': 'Decode Error'}
 
             h_ref, w_ref = ref_mask.shape
             curr_img_resized = cv2.resize(curr_img, (w_ref, h_ref))
 
-            # --- FASE 1: CALCOLO SCORE & CONTORNO (Nuova Logica Robusta) ---
-            alignment_score, live_contour_points = self._calculate_alignment_and_contour(curr_img_resized, ref_mask)
+            # --- FASE 1: ESTRAZIONE CONTORNO LIVE PRECISO ---
+            live_contour, live_contour_points = self._extract_live_contour(curr_img_resized)
+            
+            # --- FASE 2: CONFRONTO CONTORNI (SHAPE MATCHING) ---
+            shape_similarity = 1.0  # Default: non simili
+            alignment_score = 0.0
+            
+            if live_contour is not None and ref_contour is not None:
+                # Usa cv2.matchShapes per confrontare le forme
+                # Valore < 0.1 = molto simili, > 0.3 = molto diversi
+                shape_similarity = cv2.matchShapes(live_contour, ref_contour, cv2.CONTOURS_MATCH_I1, 0)
+                
+                # Calcola anche uno score visivo per feedback utente
+                alignment_score = self._calculate_visual_alignment_score(
+                    live_contour, ref_contour, (h_ref, w_ref)
+                )
+            
+            # LOCK si attiva solo se i contorni combaciano bene
+            # Soglia shape matching: 0.15 (più basso = più preciso)
+            is_locked = (shape_similarity < 0.15) and (alignment_score >= 75.0)
 
-            # Soglia Strict (80%)
-            is_locked = alignment_score >= 80.0
-
-            # --- FASE 2: SENSORI ---
+            # --- FASE 3: VERIFICA SENSORI (solo se locked) ---
             steps_config = session.get('steps_config', {})
             target_sensors = steps_config.get(current_step_req, [])
             sensor_status = []
             present_cnt = 0
 
             if steps_config:
-                if is_locked:
+                if is_locked and live_contour is not None:
+                    # Verifica sensori SOLO nell'area del contorno validato
                     for step_key, s_list in steps_config.items():
                         is_curr_step = (str(step_key) == current_step_req)
                         for s in s_list:
                             x, y, r = s['x'], s['y'], s['r']
-                            x1, y1 = max(0, x - r), max(0, y - r)
-                            x2, y2 = min(w_ref, x + r), min(h_ref, y + r)
-                            roi = curr_img_resized[y1:y2, x1:x2]
-                            is_present = check_sensor_color(roi, threshold=0.015)
-                            sensor_status.append({'id': s['id'], 'step': int(step_key), 'present': is_present})
-                            if is_curr_step and is_present: present_cnt += 1
+                            
+                            # Controlla se il sensore è dentro il contorno
+                            point_in_contour = cv2.pointPolygonTest(live_contour, (x, y), False) >= 0
+                            
+                            is_present = False
+                            if point_in_contour:
+                                # Solo se è dentro il contorno, verifica il colore
+                                x1, y1 = max(0, x - r), max(0, y - r)
+                                x2, y2 = min(w_ref, x + r), min(h_ref, y + r)
+                                roi = curr_img_resized[y1:y2, x1:x2]
+                                is_present = check_sensor_color(roi, threshold=0.015)
+                            
+                            sensor_status.append({
+                                'id': s['id'], 
+                                'step': int(step_key), 
+                                'present': is_present,
+                                'in_area': point_in_contour
+                            })
+                            if is_curr_step and is_present: 
+                                present_cnt += 1
                 else:
                     for step_key, s_list in steps_config.items():
                         for s in s_list:
-                            sensor_status.append({'id': s['id'], 'step': int(step_key), 'present': False})
+                            sensor_status.append({
+                                'id': s['id'], 
+                                'step': int(step_key), 
+                                'present': False,
+                                'in_area': False
+                            })
 
             # --- UI FEEDBACK ---
             total_targets = len(target_sensors)
@@ -100,18 +143,19 @@ class ValidationService:
                     direct = "Posiziona il soggetto al centro"
                 elif alignment_score < 50:
                     msg = "Avvicinati..."
-                    direct = "Cerca di riempire il disegno"
-                elif alignment_score < 80:
+                    direct = f"Contorno rilevato - allinealo (match: {int((1-shape_similarity)*100)}%)"
+                elif alignment_score < 75:
                     msg = "Quasi..."
-                    direct = "Raddrizza e tieni fermo i bordi"
+                    direct = "Centra e sovrapponi il disegno"
             else:
                 if total_targets == 0:
                     final_acc = 100.0
-                    msg = "Attesa Config"
+                    msg = "Contorno Validato"
+                    direct = "Attesa Config Sensori"
                 elif pct_sensors_found < 100:
                     final_acc = 80.0 + (pct_sensors_found * 0.19)
-                    msg = "Allineato"
-                    direct = f"Catturati {present_cnt}/{total_targets}"
+                    msg = "Contorno OK"
+                    direct = f"Posiziona sensori: {present_cnt}/{total_targets}"
                 else:
                     final_acc = 100.0
                     msg = "Perfetto"
@@ -122,6 +166,7 @@ class ValidationService:
                 'accuracy': round(final_acc, 1),
                 'is_locked': is_locked,
                 'live_contour': live_contour_points,
+                'shape_match': round((1 - shape_similarity) * 100, 1),  # % similarità
                 'message': msg,
                 'direction': direct,
                 'sensors_status': sensor_status
@@ -131,92 +176,134 @@ class ValidationService:
             logger.error(f'Validation Error: {e}')
             return {'success': False, 'error': str(e)}
 
-    def _calculate_alignment_and_contour(self, live_img, ref_mask) -> Tuple[float, List]:
+    def _extract_reference_contour(self, ref_mask):
         """
-        Nuova logica robusta:
-        1. Preprocessing forte per ridurre rumore.
-        2. Morfologia per unire i bordi in forme solide.
-        3. Filtro: Sceglie il contorno più grande SOLO se è al centro dell'immagine.
+        Estrae il contorno principale dal disegno di riferimento.
+        Restituisce il contorno più grande come riferimento preciso.
+        """
+        try:
+            # Applica edge detection sulla mask
+            edges = cv2.Canny(ref_mask, 50, 150)
+            
+            # Trova contorni
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if not contours:
+                return None
+            
+            # Prendi il contorno più grande (dovrebbe essere la gamba)
+            largest_contour = max(contours, key=cv2.contourArea)
+            
+            # Semplifica leggermente per renderlo più robusto al matching
+            epsilon = 0.002 * cv2.arcLength(largest_contour, True)
+            approx_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+            
+            logger.info(f"✅ Contorno di riferimento estratto: {len(approx_contour)} punti")
+            return approx_contour
+            
+        except Exception as e:
+            logger.error(f"Errore estrazione contorno riferimento: {e}")
+            return None
+
+    def _extract_live_contour(self, live_img):
+        """
+        Estrae il contorno preciso dalla camera live.
+        Preprocessing robusto per gestire rumore e dettagli.
+        Restituisce: (contour_object, points_list_for_frontend)
         """
         h_img, w_img = live_img.shape[:2]
         img_center_x, img_center_y = w_img // 2, h_img // 2
 
         # 1. Preprocessing Robusto
         gray = cv2.cvtColor(live_img, cv2.COLOR_BGR2GRAY)
-        # Sfocatura maggiore per sopprimere dettagli fini (piastrelle, texture)
+        # Sfocatura maggiore per sopprimere dettagli fini
         blurred = cv2.GaussianBlur(gray, (9, 9), 0)
 
-        # Edge detection (Canny)
+        # Edge detection
         edges = cv2.Canny(blurred, 30, 100)
 
-        # 2. Operazioni Morfologiche (Cruciale!)
-        # Usiamo una "Chiusura" (Dilatazione seguita da Erosione).
-        # Questo serve a collegare linee interrotte e riempire piccoli buchi,
-        # trasformando bordi confusi in una "forma" più solida.
+        # 2. Operazioni Morfologiche per connettere bordi
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         closed_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
 
-        # Trova i contorni sull'immagine "pulita"
+        # Trova i contorni
         contours, _ = cv2.findContours(closed_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         best_contour = None
         max_area = 0
 
-        # Definiamo una "Zona Centrale Sicura" (il 50% centrale dello schermo)
+        # Zona Centrale Sicura (50% centrale dello schermo)
         margin_w = w_img * 0.25
         margin_h = h_img * 0.25
         safe_x_min, safe_x_max = margin_w, w_img - margin_w
         safe_y_min, safe_y_max = margin_h, h_img - margin_h
 
-        # 3. Filtro di Centralità
+        # 3. Filtro di Centralità - prende solo contorni centrali
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            # Ignora oggetti troppo piccoli (es. meno del 2% dello schermo)
-            if area < (w_img * h_img * 0.02): continue
+            # Ignora oggetti troppo piccoli (< 2% dello schermo)
+            if area < (w_img * h_img * 0.02): 
+                continue
 
-            # Calcola il baricentro (centro di massa) del contorno
+            # Calcola il baricentro
             M = cv2.moments(cnt)
-            if M["m00"] == 0: continue
+            if M["m00"] == 0: 
+                continue
             cx = int(M["m10"] / M["m00"])
             cy = int(M["m01"] / M["m00"])
 
-            # Verifica se il centro del contorno cade nella zona sicura centrale
+            # Verifica centralità
             is_central = (safe_x_min < cx < safe_x_max) and (safe_y_min < cy < safe_y_max)
 
-            # Se è centrale ed è il più grande trovato finora, tienilo
             if is_central and area > max_area:
                 max_area = area
                 best_contour = cnt
 
         live_points = []
-        score = 0.0
-
+        
         if best_contour is not None:
-            # Semplifica il contorno per l'invio al frontend
+            # Semplifica per l'invio al frontend
             epsilon = 0.004 * cv2.arcLength(best_contour, True)
             approx = cv2.approxPolyDP(best_contour, epsilon, True)
             live_points = approx.reshape(-1, 2).tolist()
-
-            # --- CALCOLO SCORE (Tollerante per soglia 80%) ---
-            ref_edges_ref = cv2.Canny(ref_mask, 50, 150)
-            # Tolleranza elevata (circa 10px per lato) per facilitare il raggiungimento dell'80%
-            ref_fat = cv2.dilate(ref_edges_ref, np.ones((21, 21), np.uint8))
-
-            live_edges_mask = np.zeros_like(ref_mask)
-            cv2.drawContours(live_edges_mask, [best_contour], -1, 255, thickness=2)
-
-            intersection = cv2.bitwise_and(live_edges_mask, live_edges_mask, mask=ref_fat)
-            matched_pixels = cv2.countNonZero(intersection)
-            total_live_pixels = cv2.countNonZero(live_edges_mask)
-
-            if total_live_pixels > 0:
-                raw_score = (matched_pixels / total_live_pixels) * 100
-                score = min(100, raw_score)
+            return best_contour, live_points
         else:
-            # Nessun contorno valido trovato al centro
-            score = 0.0
+            return None, []
 
-        return score, live_points
+    def _calculate_visual_alignment_score(self, live_contour, ref_contour, img_dims):
+        """
+        Calcola uno score visivo (0-100) per dare feedback all'utente.
+        Basato su sovrapposizione dei contorni.
+        """
+        try:
+            h, w = img_dims
+            
+            # Crea maschere dai contorni
+            ref_mask = np.zeros((h, w), dtype=np.uint8)
+            live_mask = np.zeros((h, w), dtype=np.uint8)
+            
+            cv2.drawContours(ref_mask, [ref_contour], -1, 255, thickness=cv2.FILLED)
+            cv2.drawContours(live_mask, [live_contour], -1, 255, thickness=cv2.FILLED)
+            
+            # Calcola intersezione e unione
+            intersection = cv2.bitwise_and(ref_mask, live_mask)
+            union = cv2.bitwise_or(ref_mask, live_mask)
+            
+            intersection_area = cv2.countNonZero(intersection)
+            union_area = cv2.countNonZero(union)
+            
+            if union_area == 0:
+                return 0.0
+            
+            # IoU (Intersection over Union) come score
+            iou = (intersection_area / union_area) * 100
+            
+            return min(100.0, iou)
+            
+        except Exception as e:
+            logger.error(f"Errore calcolo alignment score: {e}")
+            return 0.0
+
 
     # (Metodi di decodifica helper rimangono invariati)
     def _decode_base64_image(self, b64):
