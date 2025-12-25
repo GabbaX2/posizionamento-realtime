@@ -3,3 +3,4 @@ opencv-python==4.10.0.84
 numpy==1.26.4
 Pillow==10.4.0
 rembg==2.0.59
+cryptography==46.0.0
